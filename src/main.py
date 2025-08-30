@@ -12,24 +12,24 @@ def _():
     import geopandas as gp
     import folium as fl
 
-    import gtfs_kit as gk
+    import gtfs_kit as gtfs
 
     DATA = pl.Path("./data")
-    return DATA, gk
+    return DATA, gtfs
 
 
 @app.cell
-def _(DATA, gk):
+def _(DATA, gtfs):
     path = DATA / "wiener_linien_gtfs.zip"
-    gk.list_feed(path)
+    gtfs.list_feed(path)
     return (path,)
 
 
 @app.cell
-def _(gk, path):
+def _(gtfs, path):
     # Read feed and describe
 
-    feed = gk.read_feed(path, dist_units="m")
+    feed = gtfs.read_feed(path, dist_units="m")
     feed.describe()
     return
 

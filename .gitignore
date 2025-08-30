@@ -3,6 +3,8 @@
 data/
 **/out/
 **/target/
+**/__marimo__
+#initializer
 
 ############################### GENERATED ignore template ##############################
 

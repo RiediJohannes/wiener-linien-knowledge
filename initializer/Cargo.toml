@@ -1,0 +1,9 @@
+[package]
+name = "initializer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gtfs-structures = "0.44.0"
+neo4rs = "0.8.0"
+tokio = { version = "1.47.1", features = ["rt", "rt-multi-thread", "macros"] }
