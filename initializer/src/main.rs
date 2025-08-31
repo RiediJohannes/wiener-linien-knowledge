@@ -17,9 +17,18 @@ async fn main() {
         .expect("Failed to construct connection settings for Neo4j");
 
     println!("Connecting to Neo4j instance at {} ...", URI);
-    let graph = Graph::connect(neo4j_config).await.unwrap();
+    let graph = Graph::connect(neo4j_config).await
+        .expect("Failed to connect to Neo4j instance");
 
-    let result = graph.execute(query("MATCH (n) RETURN 1 LIMIT 1")).await;
+    // Ask the database to return '1' if there is ANY node and check if we received something
+    let mut result = graph.execute(query(r#"
+        MATCH (n)
+        WHERE n:Agency OR n:Route OR n:Trip OR n:Service OR n:ServiceException OR n:Stop OR n:StopTime
+        RETURN 1 LIMIT 1
+    "#)).await.unwrap();
+    if let Ok(Some(_)) = result.next().await {
+        println!("Warning: Your Neo4j instance already contains some GTFS data. Importing the GTFS data might lead to duplicate nodes.");
+    }
 
     println!("Importing GTFS data into Neo4j ...");
     let queries = [
@@ -125,7 +134,9 @@ async fn main() {
         print!("-- Importing data: {}", name);
         let start_time = Instant::now();
 
-        graph.run(query(query_str)).await.unwrap();
+        graph.run(query(query_str)).await.unwrap_or_else(
+            |e| panic!("An error occurred during the import of '{}'.\nError: {}", name, e));
+
         println!("-> finished in {} seconds", start_time.elapsed().as_secs());
     }
 
