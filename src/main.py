@@ -8,9 +8,9 @@ app = marimo.App(width="medium")
 def _():
     import pathlib as pl
 
-    import pandas as pd
-    import geopandas as gp
-    import folium as fl
+    # import pandas as pd
+    # import geopandas as gp
+    # import folium as fl
 
     import gtfs_kit as gtfs
 
@@ -18,30 +18,18 @@ def _():
     return DATA, gtfs
 
 
-@app.cell
-def _(DATA, gtfs):
-    path = DATA / "wiener_linien_gtfs.zip"
-    gtfs.list_feed(path)
-    return (path,)
-
-
-@app.cell
-def _(gtfs, path):
-    # Read feed and describe
-
-    feed = gtfs.read_feed(path, dist_units="m")
-    feed.describe()
-    return
+# @app.cell
+# def _(DATA, gtfs):
+#     path = DATA / "wiener_linien_gtfs.zip"
+#     gtfs.list_feed(path)
+#     return (path,)
 
 
 @app.cell
 def _():
-    return
+    import components.graph as graph
 
-
-@app.cell
-def _():
-    import marimo as mo
+    graph.import_population_data()
     return
 
 

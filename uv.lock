@@ -464,6 +464,18 @@ wheels = [
 ]
 
 [[package]]
+name = "neo4j"
+version = "5.28.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/50/69/4862fabc082f2447131aada5c91736155349d77ebf443af7f59553b7b789/neo4j-5.28.2.tar.gz", hash = "sha256:7d38e27e4f987a45cc9052500c6ee27325cb23dae6509037fe31dd7ddaed70c7", size = 231874, upload-time = "2025-07-30T06:04:34.669Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/04/00/1f74089c06aec1fac9390e2300a6a6b2381e0dac281783d64ccca9d681fd/neo4j-5.28.2-py3-none-any.whl", hash = "sha256:5c53b5c3eee6dee7e920c9724391aa38d7135a651e71b766da00533b92a91a94", size = 313156, upload-time = "2025-07-30T06:04:31.438Z" },
+]
+
+[[package]]
 name = "numpy"
 version = "2.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -918,6 +930,7 @@ dependencies = [
     { name = "gtfs-kit" },
     { name = "marimo" },
     { name = "matplotlib" },
+    { name = "neo4j" },
     { name = "pandas" },
     { name = "pyarrow" },
 ]
@@ -929,6 +942,7 @@ requires-dist = [
     { name = "gtfs-kit", specifier = ">=10.3.1" },
     { name = "marimo", specifier = ">=0.14.16" },
     { name = "matplotlib", specifier = ">=3.10.5" },
+    { name = "neo4j", specifier = ">=5.28.2" },
     { name = "pandas", specifier = ">=2.3.1" },
     { name = "pyarrow", specifier = ">=21.0.0" },
 ]
