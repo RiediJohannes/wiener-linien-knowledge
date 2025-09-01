@@ -8,9 +8,12 @@ dependencies = [
     "folium>=0.20.0",
     "geopandas>=1.1.1",
     "gtfs-kit>=10.3.1",
-    "marimo>=0.14.16",
-    "matplotlib>=3.10.5",
+    "marimo>=0.15",
+    "matplotlib>=3.10.6",
     "neo4j>=5.28.2",
-    "pandas>=2.3.1",
+    "pandas>=2.3.2",
     "pyarrow>=21.0.0",
 ]
+
+[tool.marimo.runtime]
+pythonpath = ["."]
