@@ -8,10 +8,11 @@ driver = GraphDatabase.driver(URI, auth=AUTH)
 
 
 class Stop:
-    def __init__(self, stop_id: str, latitude: float, longitude: float):
+    def __init__(self, stop_id: str, latitude: float, longitude: float, name: str):
         self.id: str = stop_id
         self.lat: float = latitude
         self.lon: float = longitude
+        self.name: str = name
 
 class SubDistrict:
     def __init__(self, district_num: int, subdistrict_num: int, population: int, area: float, shape: str):
@@ -94,10 +95,11 @@ def get_stops() -> list[Stop] | None:
     MATCH (s:Stop)
     RETURN s.id as id,
            s.lat as lat,
-           s.lon as lon;
+           s.lon as lon,
+           s.name as name;
     """
     results = execute_query(query)
-    return [Stop(record["id"], record["lat"], record["lon"]) for record in results]
+    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
 
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
     all_stop_pairs = []

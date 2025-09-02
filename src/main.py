@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.15.2"
-app = marimo.App(app_title="", css_file="styles/notebook.css")
+app = marimo.App(width="medium", app_title="", css_file="styles/notebook.css")
 
 
 @app.cell
@@ -162,6 +162,42 @@ def functions_entails_vicinity(graph):
 
     _summary = graph.execute_operation(_operation)
     print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+    return
+
+
+@app.cell
+def _(graph, mo):
+    import folium
+    import pandas as pd
+
+    _stops = graph.get_stops()
+
+    # Create a folium map centered on the mean of the coordinates
+    m = folium.Map(
+        tiles='https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
+        attr='&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        location=[48.2202331, 16.3796424],
+        zoom_start=11
+    )
+
+    # Add markers for each stop
+    for stop in _stops:
+        folium.CircleMarker(
+            location=[stop.lat, stop.lon],
+            radius=2,
+            color="red",
+            fill=True,
+            fill_opacity=0.4,
+            opacity=0.6,
+            popup=stop.name,
+            tooltip=stop.id
+        ).add_to(m)
+
+
+    # Save the map to an HTML file
+    #m.save("stops_map.html")
+
+    mo.iframe(m._repr_html_(), height=600)
     return
 
 
