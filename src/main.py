@@ -15,7 +15,7 @@ def imports():
 
 
 @app.cell
-def _(mo):
+def project_heading(mo):
     mo.callout(mo.md("""
     # 🚊 Wiener Linien Knowledge Graph 🚋
     """), kind='danger')
@@ -54,15 +54,15 @@ def _(mo):
 
 
 @app.cell
-def _(geo, graph):
-    stops = graph.get_stops()
-    print(f"Queried {len(stops)} stops from the graph")
+def merging_nearby_stops(geo, graph):
+    _stops = graph.get_stops()
+    print(f"Queried {len(_stops)} stops from the graph")
 
-    stop_clusters = geo.find_stop_clusters(stops, 200, 400)
-    print(f"Detected {len(stop_clusters)} clusters of stops")
-    _summary = graph.cluster_stops(stop_clusters)
+    _stop_clusters = geo.find_stop_clusters(_stops, 200, 400)
+    print(f"Detected {len(_stop_clusters)} clusters of stops")
+    _summary = graph.cluster_stops(_stop_clusters)
     print(f"Created {_summary.counters.relationships_created} relationships")
-    return (stops,)
+    return
 
 
 @app.cell
@@ -77,19 +77,38 @@ def _(mo):
 
 
 @app.cell
-def match_stops_with_districts(geo, graph, stops):
-    #stops = graph.get_stops()
-    print(f"Queried {len(stops)} stops from the graph")
-    subdistricts = graph.get_subdistricts()
+def match_stops_with_districts(geo, graph, subdistricts):
+    _stops = graph.get_stops()
+    print(f"Queried {len(_stops)} stops from the graph")
+    _subdistricts = graph.get_subdistricts()
     print(f"Queried {len(subdistricts)} subdistricts from the graph")
 
-    stops_within_districts = geo.match_stops_to_subdistricts(stops, subdistricts, buffer_metres = 20)
-    _summary = graph.connect_stop_to_subdistricts(stops_within_districts, 'LOCATED_IN')
+    _stops_within_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 20)
+    _summary = graph.connect_stop_to_subdistricts(_stops_within_districts, 'LOCATED_IN')
     print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
 
-    stops_close_to_districts = geo.match_stops_to_subdistricts(stops, subdistricts, buffer_metres = 500)
-    _summary = graph.connect_stop_to_subdistricts(stops_close_to_districts, 'LOCATED_NEARBY')
+    _stops_close_to_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 500)
+    _summary = graph.connect_stop_to_subdistricts(_stops_close_to_districts, 'LOCATED_NEARBY')
     print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    Additionally, we define:
+    > For any stop $s$, if there is another stop $s'$ such that $s'$ is close/nearby to a subdistrict $d$ and $s$ functions as $s'$, then
+    then $s$ is also close/nearby to d.
+
+    This can be solved entirely within a cypher query.
+    """
+    )
+    return
+
+
+@app.cell
+def functions_entails_vicinity():
     return
 
 

@@ -84,18 +84,22 @@ def _enforce_diameter_constraint(gdf_stops: gpd.GeoDataFrame, cluster_distance: 
 
     for cluster_id, cluster_group in clusters:
         diameter = _approximate_diameter(cluster_group.geometry.tolist())
-        max_distance = cluster_distance
+        max_distance: float = cluster_distance * 1.0
 
         # If the diameter exceeds the limit, split the cluster iteratively
         while diameter > max_diameter_meters:
-            max_distance = max_distance / 2
+            max_distance = max_distance * 0.8
+
+            # Reset the entire "cluster" column to -1 for this group
+            gdf_stops.loc[cluster_group.index, "cluster"] = -1
+            cluster_group = cluster_group.copy()
+            cluster_group["cluster"] = -1
 
             # Split the cluster into smaller sub-clusters using DBSCAN with a smaller eps
             coords = np.array([(geom.x, geom.y) for geom in cluster_group.geometry])
             new_cluster_assignment = DBSCAN(eps=max_distance, min_samples=2, algorithm="ball_tree", metric="euclidean").fit(coords)
 
             # Update the cluster_group with new sub-cluster labels
-            cluster_group = cluster_group.copy()
             for idx, label in zip(cluster_group.index, new_cluster_assignment.labels_):
                 cluster_group.at[idx, "cluster"] = cluster_id * 1000 + label if label != -1 else -1
 
