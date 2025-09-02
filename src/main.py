@@ -47,7 +47,7 @@ def _(mo):
     Next, we obtain new knowledge from our data.
 
     ## Merging nearby stops
-    In the first step, we detect all groups of nearby stops that practically function like one single stop.
+    In the first step, we detect all groups of nearby stops that practically function like one unified stop.
     """
     )
     return
@@ -69,10 +69,50 @@ def merging_nearby_stops(geo, graph):
 def _(mo):
     mo.md(
         r"""
-    ## Matching stops to districts
-    Next, we match each stop to the Viennese registration districts that either contain the stop or are reasonably close to the stop.
+    This bundles lots of stops that are geographically very close to each other, while still enforcing some upper limits on the diameter of such clusters to prevent the formation of long chains. However, these constraints might still rip apart some stations whose individual exits or platforms are particularly far apart.
+
+    Luckily, the Wiener Linien used somewhat of a hierarchichal structure when assigning unique IDs to their stops. Using the semantics of these stop IDs, we can further improve our stop clustering and stitch together all platforms/exits of any station.
     """
     )
+    return
+
+
+@app.cell
+def detect_station_exits(hi):
+    hi
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ## Matching stops to districts
+    Our next goal is to match each stop to Viennese registration districts they serve.  
+    First, let's delete stops entirely that are located outside the Vienna city boundary. Most notably, this includes many stops of the _Badner Bahn_ that reach all the way to _Baden bei Wien_.
+
+    This is a simple task by relying again on the semantics of the stop IDs. Stops whose ID starts with `at:49` are within Vienna whereas stops with `at:43` at the beginning of their ID are located outside Vienna. Thus, we find and delete the latter.
+    """
+    )
+    return
+
+
+@app.cell
+def _(graph):
+    _operation = """
+    MATCH (s:Stop)
+    WHERE s.id STARTS WITH 'at:43:'
+    DETACH DELETE s
+    """
+
+    _summary = graph.execute_operation(_operation)
+    print(f"Deleted {_summary.counters.nodes_deleted} nodes")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""Next, we use the geographic coordinates of the stops to match each stop to the Viennese registration districts that either contain the stop or are reasonably close to it.""")
     return
 
 
@@ -101,14 +141,27 @@ def _(mo):
     > For any stop $s$, if there is another stop $s'$ such that $s'$ is close/nearby to a subdistrict $d$ and $s$ functions as $s'$, then
     then $s$ is also close/nearby to d.
 
-    This can be solved entirely within a cypher query.
+    This can be solved entirely with a cypher query:
+    ```cypher
+    MATCH (s:Stop)-[f:FUNCTIONS_AS]->(t:Stop)-[l:LOCATED_IN|LOCATED_NEARBY]->(d:SubDistrict)
+    WHERE NOT (s)-[:LOCATED_NEARBY]->(d)
+    MERGE (s)-[:LOCATED_NEARBY]->(d);
+    ```
     """
     )
     return
 
 
 @app.cell
-def functions_entails_vicinity():
+def functions_entails_vicinity(graph):
+    _operation = """
+    MATCH (s:Stop)-[f:FUNCTIONS_AS]->(t:Stop)-[l:LOCATED_IN|LOCATED_NEARBY]->(d:SubDistrict)
+    WHERE NOT (s)-[:LOCATED_NEARBY]->(d)
+    MERGE (s)-[:LOCATED_NEARBY]->(d);
+    """
+
+    _summary = graph.execute_operation(_operation)
+    print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
     return
 
 

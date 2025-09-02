@@ -44,11 +44,13 @@ async fn main() {
     println!("Importing GTFS data into Neo4j ...");
     println!("-- Creating indexes for GTFS node types");
     let index_queries = [
-        "(s:Stop) ON (s.id);",
         "(r:Route) ON (r.id)",
         "(s:Service) ON (s.id)",
         "(ex:ServiceException) ON (ex.service_id)",
         "(t:Trip) ON (t.id)",
+        "(s:Stop) ON (s.id);",
+        "(s:Stop) ON (s.lon);",
+        "(s:Stop) ON (s.lat);",
         "(st:StopTime) ON (st.trip_id)",
         "(st:StopTime) ON (st.stop_id)",
     ];
