@@ -118,6 +118,26 @@ def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
 
     return None
 
+def connect_stop_to_subdistricts(stops_with_districts: list[tuple[str, list[str]]], relation_name: str) -> ResultSummary | None:
+    # Prepare the data as a list of dictionaries for neo4j's UNWIND operation
+    stop_district_pairs = [
+        {"stop_id": stop_id, "dist_code": int(dist_code), "subdist_code": int(subdist_code)}
+        for stop_id, subdistricts in stops_with_districts
+        for combined_id in subdistricts
+        for dist_code, subdist_code in [combined_id.split('-')]  # Split combined subdistrict identifier
+    ]
+
+    if not stop_district_pairs or not relation_name:
+        return None
+
+    query = f"""
+        UNWIND $stop_district_pairs AS matchup
+        MATCH (s:Stop {{id: matchup.stop_id}})
+        MATCH (d:SubDistrict {{district_num: matchup.dist_code, sub_district_num: matchup.subdist_code}})
+        MERGE (s)-[:{relation_name}]->(d)
+        """
+    return execute_operation(query, stop_district_pairs=stop_district_pairs)
+
 
 def execute_operation(cypher_operation, **params) -> ResultSummary | None:
     """

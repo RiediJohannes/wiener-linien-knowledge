@@ -60,8 +60,8 @@ def _(geo, graph):
 
     stop_clusters = geo.find_stop_clusters(stops, 200, 400)
     print(f"Detected {len(stop_clusters)} clusters of stops")
-    summary = graph.cluster_stops(stop_clusters)
-    print(f"Created {summary.counters.relationships_created} relationships")
+    _summary = graph.cluster_stops(stop_clusters)
+    print(f"Created {_summary.counters.relationships_created} relationships")
     return (stops,)
 
 
@@ -84,12 +84,12 @@ def match_stops_with_districts(geo, graph, stops):
     print(f"Queried {len(subdistricts)} subdistricts from the graph")
 
     stops_within_districts = geo.match_stops_to_subdistricts(stops, subdistricts, buffer_metres = 20)
-    for stop in stops_within_districts:
-        print(stop)
+    _summary = graph.connect_stop_to_subdistricts(stops_within_districts, 'LOCATED_IN')
+    print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
 
     stops_close_to_districts = geo.match_stops_to_subdistricts(stops, subdistricts, buffer_metres = 500)
-    for stop in stops_close_to_districts:
-        print(stop)
+    _summary = graph.connect_stop_to_subdistricts(stops_close_to_districts, 'LOCATED_NEARBY')
+    print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
     return
 
 
