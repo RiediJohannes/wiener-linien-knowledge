@@ -17,11 +17,6 @@ Reading the database using rust took roughly 3 minutes before optimisation.
 - After deactivating trimming → 1 minute
 - Additional problem with times that extend beyond 23:59:59
 
-
-DISTRICT_CODE -- Gemeindebezirkskennzahl  
-SUB_DISTRICT_CODE -- Zählbezirkskennzahl  
-WHG_POP_TOTAL -- population
-
 ## Time
 
 - 30.8.
@@ -35,7 +30,8 @@ WHG_POP_TOTAL -- population
   + 20:00-22:30
 
 - 1.9.
-  + 15:30
+  + 15:30-22:00
+  + 23:30-
 
 
 ## Submission

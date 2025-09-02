@@ -26,7 +26,7 @@ def _(mo):
     mo.md(
         r"""
     # Creating the knowledge graph
-    First, we need to load the data about Viennas registration districts into our knowledge graph. This includes information about the registration districts' naming, their population and area, as well as their geographic coordinates.
+    First, we need to load the data about Vienna's registration districts into our knowledge graph. This includes information about the registration districts' naming, their population and area, as well as their geographic coordinates.
     """
     )
     return
@@ -53,7 +53,14 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(geo, graph):
+    stops = graph.get_stops()
+    print(f"Queried {len(stops)} stops from the graph")
+
+    result = geo.find_stop_clusters(stops, 100, 250)
+    for label in result:
+        print(label)
+    print(len(result))
     return
 
 
