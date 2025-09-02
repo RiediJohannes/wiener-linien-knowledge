@@ -1,0 +1,36 @@
+/* Load Inter from Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+
+:root, html {
+  /*--marimo-heading-font: 'Inter', sans-serif;*/
+  --marimo-monospace-font: 'Jetbrains Mono', 'Cascadia Code', monospace;
+  --marimo-text-font: 'Atkinson Hyperlegible', 'PT Sans', sans-serif;
+}
+
+.markdown .paragraph {
+  font-size: 1.2rem;
+  line-height: 1.7rem;
+  margin-block-end: 1.5rem;
+  /*color: light-dark(navy, pink);*/
+}
+
+.markdown .paragraph:has(+ blockquote) {
+  margin-block-end: 0.5rem;
+}
+
+.marimo-cell {
+  margin-bottom: 2.7em;
+}
+
+h2 {
+  margin-top: 1.4em !important;
+  margin-bottom: 0.7em !important;
+}
+
+blockquote {
+  margin-top: 0;
+}
+
+blockquote .arithmatex {
+  line-height: 1.3em;
+}

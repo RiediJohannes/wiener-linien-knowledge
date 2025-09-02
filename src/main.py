@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.15.2"
-app = marimo.App(width="medium")
+app = marimo.App(app_title="", css_file="styles/notebook.css")
 
 
 @app.cell
