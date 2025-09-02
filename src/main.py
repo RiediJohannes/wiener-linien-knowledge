@@ -8,8 +8,9 @@ app = marimo.App(width="medium")
 def imports():
     import marimo as mo
 
-    import components.graph as graph
-    import components.geo_spatial as geo
+    import src.components.graph as graph
+    import src.components.geo_spatial as geo
+    import src.components.presentation as present
     return geo, graph, mo
 
 
@@ -57,11 +58,11 @@ def _(geo, graph):
     stops = graph.get_stops()
     print(f"Queried {len(stops)} stops from the graph")
 
-    result = geo.find_stop_clusters(stops, 100, 250)
-    for label in result:
-        print(label)
-    print(len(result))
-    return
+    stop_clusters = geo.find_stop_clusters(stops, 200, 400)
+    print(f"Detected {len(stop_clusters)} clusters of stops")
+    summary = graph.cluster_stops(stop_clusters)
+    print(f"Created {summary.counters.relationships_created} relationships")
+    return (stops,)
 
 
 @app.cell
@@ -76,13 +77,13 @@ def _(mo):
 
 
 @app.cell
-def match_stops_with_districts(geo, graph):
-    stops = graph.get_stops()
+def match_stops_with_districts(geo, graph, stops):
+    #stops = graph.get_stops()
     print(f"Queried {len(stops)} stops from the graph")
     subdistricts = graph.get_subdistricts()
     print(f"Queried {len(subdistricts)} subdistricts from the graph")
 
-    stops_within_districts = geo.match_stops_to_subdistricts(stops, subdistricts, buffer_metres = 50)
+    stops_within_districts = geo.match_stops_to_subdistricts(stops, subdistricts, buffer_metres = 20)
     for stop in stops_within_districts:
         print(stop)
 

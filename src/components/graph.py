@@ -99,6 +99,24 @@ def get_stops() -> list[Stop] | None:
     results = execute_query(query)
     return [Stop(record["id"], record["lat"], record["lon"]) for record in results]
 
+def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
+    all_stop_pairs = []
+    for cluster in stop_clusters:
+        pairs = [(stop1, stop2) for i, stop1 in enumerate(cluster)
+                 for stop2 in cluster[i+1:]]
+        all_stop_pairs.extend(pairs)
+
+    if all_stop_pairs:
+        operation = """
+        UNWIND $all_pairs AS pair
+        MERGE (s1:Stop {id: pair[0]})
+        MERGE (s2:Stop {id: pair[1]})
+        MERGE (s1)-[:FUNCTIONS_AS]->(s2)
+        MERGE (s2)-[:FUNCTIONS_AS]->(s1)
+        """
+        return execute_operation(operation, all_pairs=all_stop_pairs)
+
+    return None
 
 
 def execute_operation(cypher_operation, **params) -> ResultSummary | None:

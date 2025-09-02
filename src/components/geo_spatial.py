@@ -54,8 +54,8 @@ def find_stop_clusters(stops: list[Stop], cluster_distance_metres: int = 50, max
     # Step 2: Enforce diameter constraint
     stops_geoframe = _enforce_diameter_constraint(stops_geoframe, cluster_distance_metres, max_diameter_meters)
 
-    # Step 3: Resolve overlaps
-    stops_geoframe = _resolve_overlaps(stops_geoframe)
+    # Step 3: Filter invalid clusters
+    stops_geoframe = _filter_invalid_clusters(stops_geoframe)
 
     # Group stop IDs by cluster
     clusters = stops_geoframe.groupby("cluster")["stop_id"].agg(list).tolist()
@@ -97,10 +97,7 @@ def _enforce_diameter_constraint(gdf_stops: gpd.GeoDataFrame, cluster_distance: 
             # Update the cluster_group with new sub-cluster labels
             cluster_group = cluster_group.copy()
             for idx, label in zip(cluster_group.index, new_cluster_assignment.labels_):
-                if label != -1:
-                    cluster_group.at[idx, "cluster"] = cluster_id * 1000 + label
-                else:
-                    cluster_group.at[idx, "cluster"] = -1
+                cluster_group.at[idx, "cluster"] = cluster_id * 1000 + label if label != -1 else -1
 
             # Find the largest diameter among all sub-clusters
             sub_clusters = cluster_group[cluster_group["cluster"] != -1].groupby("cluster")
@@ -116,20 +113,20 @@ def _enforce_diameter_constraint(gdf_stops: gpd.GeoDataFrame, cluster_distance: 
 
     return gdf_stops
 
-def _resolve_overlaps(gdf_stops: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    # Group stops by their final cluster labels
-    cluster_sizes = gdf_stops["cluster"].value_counts()
-
+def _filter_invalid_clusters(gdf_stops: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     # For each stop, keep only the largest cluster it belongs to
+    cluster_sizes = gdf_stops["cluster"].value_counts()
     gdf_stops["cluster_size"] = gdf_stops["cluster"].map(cluster_sizes)
     gdf_stops = gdf_stops.sort_values("cluster_size", ascending=False).drop_duplicates("stop_id", keep="first")
 
     # Since we may have produced some orphans, remove clusters with only one stop
-    cluster_counts = gdf_stops["cluster"].value_counts()
-    valid_clusters = cluster_counts[cluster_counts >= 2].index
-    gdf_stops = gdf_stops[gdf_stops["cluster"].isin(valid_clusters)]
+    non_orphan_clusters = cluster_sizes[cluster_sizes >= 2].index
+    gdf_stops = gdf_stops[gdf_stops["cluster"].isin(non_orphan_clusters)]
 
-    return gdf_stops[gdf_stops["cluster"] != -1]
+    # Remove data rows that did not get assigned a cluster one last time
+    gdf_stops = gdf_stops[gdf_stops["cluster"] != -1]
+
+    return gdf_stops
 
 def _approximate_diameter(points: list[Point]) -> float:
     """
