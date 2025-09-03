@@ -121,6 +121,19 @@ def get_stop_cluster(*args, stop_id = None, stop_name = None) -> list[Stop] | No
     results = execute_query(query)
     return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
 
+def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_stops_within = False) -> list[Stop] | None:
+    query = f"""
+    MATCH (d:SubDistrict)
+    WHERE d.district_num = $dist_num AND d.sub_district_num = $subdist_num
+    MATCH (s:Stop)-[:{"LOCATED_IN" if only_stops_within else "LOCATED_NEARBY"}]->(d)
+    RETURN s.id as id,
+           s.lat as lat,
+           s.lon as lon,
+           s.name as name;
+    """
+    results = execute_query(query, dist_num=district_code, subdist_num=subdistrict_code)
+    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+
 
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
     all_stop_pairs = []

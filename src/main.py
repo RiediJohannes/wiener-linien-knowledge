@@ -181,7 +181,8 @@ def _(graph, mo):
     import pandas as pd
 
     #_stops = graph.get_stops()
-    _stops = graph.get_stop_cluster(stop_name='Nußdorfer Straße')
+    #_stops = graph.get_stop_cluster(stop_name='Meidling')
+    _stops = graph.get_stops_for_subdistrict(10, 1)
 
     # Create a folium map centered on the mean of the coordinates
     m = folium.Map(
