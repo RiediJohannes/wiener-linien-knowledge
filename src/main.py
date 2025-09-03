@@ -71,15 +71,25 @@ def _(mo):
         r"""
     This bundles lots of stops that are geographically very close to each other, while still enforcing some upper limits on the diameter of such clusters to prevent the formation of long chains. However, these constraints might still rip apart some stations whose individual exits or platforms are particularly far apart.
 
-    Luckily, the Wiener Linien used somewhat of a hierarchichal structure when assigning unique IDs to their stops. Using the semantics of these stop IDs, we can further improve our stop clustering and stitch together all platforms/exits of any station.
+    Luckily, the Wiener Linien used somewhat of a hierarchichal structure when assigning unique IDs to their stops. In particular, the IDs consist of five components delimited by a colon, where the last (fifth) component denotes the respective exit/platform of a station. Using these semantics, we can further improve our stop clustering and stitch together all platforms/exits of each station.
     """
     )
     return
 
 
 @app.cell
-def detect_station_exits(hi):
-    hi
+def detect_station_exits(graph):
+    _operation = """
+    MATCH (s:Stop), (t:Stop)
+    WHERE s.id < t.id
+      AND split(s.id, ':')[0..3] = split(t.id, ':')[0..3]
+      AND split(s.id, ':')[4] <> split(t.id, ':')[4]
+    MERGE (s)-[:FUNCTIONS_AS]->(t)
+    MERGE (t)-[:FUNCTIONS_AS]->(s);
+    """
+
+    _summary = graph.execute_operation(_operation)
+    print(f"Created {_summary.counters.relationships_created} FUNCTIONS_AS relationships")
     return
 
 
@@ -117,11 +127,11 @@ def _(mo):
 
 
 @app.cell
-def match_stops_with_districts(geo, graph, subdistricts):
+def match_stops_with_districts(geo, graph):
     _stops = graph.get_stops()
     print(f"Queried {len(_stops)} stops from the graph")
     _subdistricts = graph.get_subdistricts()
-    print(f"Queried {len(subdistricts)} subdistricts from the graph")
+    print(f"Queried {len(_subdistricts)} subdistricts from the graph")
 
     _stops_within_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 20)
     _summary = graph.connect_stop_to_subdistricts(_stops_within_districts, 'LOCATED_IN')
@@ -170,7 +180,8 @@ def _(graph, mo):
     import folium
     import pandas as pd
 
-    _stops = graph.get_stops()
+    #_stops = graph.get_stops()
+    _stops = graph.get_stop_cluster(stop_name='Nußdorfer Straße')
 
     # Create a folium map centered on the mean of the coordinates
     m = folium.Map(

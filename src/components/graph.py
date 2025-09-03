@@ -101,6 +101,27 @@ def get_stops() -> list[Stop] | None:
     results = execute_query(query)
     return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
 
+def get_stop_cluster(*args, stop_id = None, stop_name = None) -> list[Stop] | None:
+    if stop_id is None and stop_name is None:
+        return get_stops()
+
+    where_clause: str = f"s.id = '{stop_id}'" if stop_id is not None else f"s.name = '{stop_name}'"
+
+    query = f"""
+    MATCH (s:Stop)
+    WHERE {where_clause}
+    MATCH (s)-[:FUNCTIONS_AS*0..5]->(t:Stop)
+    RETURN DISTINCT
+        t.id as id,
+        t.lat as lat,
+        t.lon as lon,
+        t.name as name;
+    """
+
+    results = execute_query(query)
+    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+
+
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
     all_stop_pairs = []
     for cluster in stop_clusters:
