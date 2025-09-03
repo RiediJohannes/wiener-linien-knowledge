@@ -53,6 +53,7 @@ async fn main() {
         "(s:Stop) ON (s.lat);",
         "(st:StopTime) ON (st.trip_id)",
         "(st:StopTime) ON (st.stop_id)",
+        "(st:StopTime) ON (st.stop_sequence)",
     ];
     for index_target in index_queries {
         graph
@@ -102,13 +103,13 @@ async fn main() {
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/calendar.txt' AS row
         MERGE (s:Service {id: row.service_id})
-          SET s.monday = (row.monday = '1'),
-              s.tuesday = (row.tuesday = '1'),
-              s.wednesday = (row.wednesday = '1'),
-              s.thursday = (row.thursday = '1'),
-              s.friday = (row.friday = '1'),
-              s.saturday = (row.saturday = '1'),
-              s.sunday = (row.sunday = '1'),
+          SET s.monday = toInteger(row.monday),
+              s.tuesday = toInteger(row.tuesday),
+              s.wednesday = toInteger(row.wednesday),
+              s.thursday = toInteger(row.thursday),
+              s.friday = toInteger(row.friday),
+              s.saturday = toInteger(row.saturday),
+              s.sunday = toInteger(row.sunday),
               s.start_date = date({
                   year: toInteger(substring(row.start_date,0,4)),
                   month: toInteger(substring(row.start_date,4,2)),

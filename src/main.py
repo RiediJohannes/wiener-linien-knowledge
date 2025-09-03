@@ -176,6 +176,70 @@ def functions_entails_vicinity(graph):
 
 
 @app.cell
+def _(mo):
+    mo.md(
+        r"""
+    Pre-calculate population density of all subdistricts:
+
+    ```cypher
+    MATCH (d:SubDistrict)
+    SET d.density = 1_000_000 * d.population / d.area;
+    ```
+
+    ### Adding Labels
+
+    Classify service exceptions into additional service and removed service
+    ```cypher
+    MATCH (ex:ServiceException)
+    WHERE ex.exception_type = 1
+    SET ex: AddedService;
+
+    MATCH (ex:ServiceException)
+    WHERE ex.exception_type = 2
+    SET ex: RemovedService;
+    ```
+
+    Labelling trips according to their mode of transport:
+    ```cypher
+    MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
+    WHERE r.type = 0  // enum value for trams or light rail
+    SET t: TramTrip
+
+    MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
+    WHERE r.type = 1  // enum value for subways
+    SET t: SubwayTrip
+
+    MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
+    WHERE r.type = 2  // enum value for trains (heavy rail)
+    SET t: TrainTrip
+
+    MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
+    WHERE r.type = 3  // enum value for buses
+    SET t: BusTrip
+    ```
+
+    Classifying services based on their days of operation:
+    ```cypher
+    MATCH (s:Service)
+    WHERE s.saturday = 1
+    SET s: SaturdayService
+
+    MATCH (s:Service)
+    WHERE s.sunday = 1
+    SET s: SundayService
+
+    MATCH (s:Service)
+    WITH s,
+        s.monday + s.tuesday + s.wednesday + s.thursday + s.friday AS weekday_count
+    WHERE weekday_count >= 3
+    SET s: WeekdayService
+    ```
+    """
+    )
+    return
+
+
+@app.cell
 def _(graph, mo):
     import folium
     import pandas as pd
@@ -185,7 +249,9 @@ def _(graph, mo):
     _stops = graph.get_stops_for_subdistrict(11, 2)
 
     # Create a folium map centered on the mean of the coordinates
-    m = folium.Map(
+    map = folium.Map(
+        #tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
+        #attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         tiles='https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
         attr='&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         location=[48.2202331, 16.3796424],
@@ -203,13 +269,18 @@ def _(graph, mo):
             opacity=0.6,
             popup=stop.name,
             tooltip=stop.id
-        ).add_to(m)
+        ).add_to(map)
 
 
     # Save the map to an HTML file
-    #m.save("stops_map.html")
+    #map.save("stops_map.html")
 
-    mo.iframe(m._repr_html_(), height=600)
+    mo.iframe(map._repr_html_(), height=600)
+    return
+
+
+@app.cell
+def _():
     return
 
 
