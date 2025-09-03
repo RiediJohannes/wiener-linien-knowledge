@@ -234,6 +234,38 @@ def _(mo):
     WHERE weekday_count >= 3
     SET s: WeekdayService
     ```
+
+    Roughly calculate how many times a single trip is operated per year: 
+    ```cypher
+    MATCH (s:Service)
+    WITH s,
+        s.monday + s.tuesday + s.wednesday + s.thursday + s.friday + s.saturday + s.sunday AS days_per_week,
+        duration.inDays(s.start_date, s.end_date).days + 1 AS operational_days
+    SET s.operations_per_year = toInteger(ceil((operational_days / 7.0) * days_per_week));
+    ```
+    """
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    **Important:** Calculate direct connections per year between each stop pair: 
+    ```cypher
+    // Consider each pair of stops that appears consecutively in some trip t
+    MATCH (t:Trip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
+          (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
+    WHERE st2.stop_sequence = st1.stop_sequence + 1
+    // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
+    MATCH (t)-[:OPERATING_ON]->(service:Service)
+    WITH s1, s2,
+      sum(service.operations_per_year) as total_operations_per_year
+    // Return the calculated values
+    RETURN s1.name as from_stop, s2.name as to_stop, total_operations_per_year
+    ORDER BY total_operations_per_year DESC;
+    ```
     """
     )
     return

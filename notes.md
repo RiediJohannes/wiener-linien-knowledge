@@ -37,7 +37,8 @@ Reading the database using rust took roughly 3 minutes before optimisation.
   + 15:30-22:00
 
 - 3.9.
-  - 14:00-
+  - 14:00-23:30
+  - 00:30
 
 
 ## Submission
