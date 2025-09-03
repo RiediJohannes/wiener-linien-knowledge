@@ -42,5 +42,13 @@ Reading the database using rust took roughly 3 minutes before optimisation.
 
 ## Submission
 
+### Data sources
+
+Subdistrict names:  
+https://www.data.gv.at/katalog/datasets/ae8d7db5-98e9-4f86-bbec-9babfa2a4f03
+
+Subdistrict shapes:  
+https://www.data.gv.at/katalog/datasets/e4079286-310c-435a-af2d-64604ba9ade5
+
 Dockerizing my marimo app:  
 https://docs.marimo.io/guides/deploying/deploying_docker/#create-a-dockerfile
