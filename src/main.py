@@ -182,7 +182,7 @@ def _(graph, mo):
 
     #_stops = graph.get_stops()
     #_stops = graph.get_stop_cluster(stop_name='Meidling')
-    _stops = graph.get_stops_for_subdistrict(10, 1)
+    _stops = graph.get_stops_for_subdistrict(11, 2)
 
     # Create a folium map centered on the mean of the coordinates
     m = folium.Map(
