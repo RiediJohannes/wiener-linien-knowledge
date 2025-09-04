@@ -218,7 +218,28 @@ def _(mo):
     SET t: BusTrip
     ```
 
-    Classifying services based on their days of operation:
+    ### Classify stops
+
+    **Bus stops:**
+    ```cypher
+    MATCH (s:Stop)<-[:AT_STOP]-(:StopTime)-[:DURING_TRIP]->(:BusTrip)
+    WHERE NOT (s:BusStop)
+    SET s: BusStop
+    ```
+    **Tram stops:**
+    ```cypher
+    MATCH (s:Stop)<-[:AT_STOP]-(:StopTime)-[:DURING_TRIP]->(:TramTrip)
+    WHERE NOT (s:TramStop)
+    SET s: TramStop
+    ```
+    **Subway stops/stations:**
+    ```cypher
+    MATCH (s:Stop)<-[:AT_STOP]-(:StopTime)-[:DURING_TRIP]->(:SubwayTrip)
+    WHERE NOT (s:SubwayStation)
+    SET s: SubwayStation
+    ```
+
+    ~~Classifying services based on their days of operation:~~
     ```cypher
     MATCH (s:Service)
     WHERE s.saturday = 1
@@ -234,15 +255,6 @@ def _(mo):
     WHERE weekday_count >= 3
     SET s: WeekdayService
     ```
-
-    Roughly calculate how many times a single trip is operated per year: 
-    ```cypher
-    MATCH (s:Service)
-    WITH s,
-        s.monday + s.tuesday + s.wednesday + s.thursday + s.friday + s.saturday + s.sunday AS days_per_week,
-        duration.inDays(s.start_date, s.end_date).days + 1 AS operational_days
-    SET s.operations_per_year = toInteger(ceil((operational_days / 7.0) * days_per_week));
-    ```
     """
     )
     return
@@ -252,6 +264,21 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
+    Roughly calculate how many times a single trip is operated per year: 
+    ```cypher
+    MATCH (s:Service)
+    // Calculate how many times a year the trip is operated regularly
+    WITH s,
+        s.monday + s.tuesday + s.wednesday + s.thursday + s.friday + s.saturday + s.sunday AS days_per_week,
+        duration.inDays(s.start_date, s.end_date).days + 1 AS operational_days
+    WITH s,
+        toInteger(ceil((operational_days / 7.0) * days_per_week)) as regular_operations_per_year
+    // If there are some exception to the schedule, subtract them
+    OPTIONAL MATCH (s)<-[:FOR_SERVICE]-(ex:ServiceException:RemovedService)
+    WITH s, regular_operations_per_year, count(DISTINCT ex.date) AS removed_days
+    SET s.operations_per_year = regular_operations_per_year - removed_days;
+    ```
+
     **Important:** Calculate direct connections per year between each stop pair: 
     ```cypher
     // Consider each pair of stops that appears consecutively in some trip t
@@ -265,6 +292,20 @@ def _(mo):
     // Return the calculated values
     RETURN s1.name as from_stop, s2.name as to_stop, total_operations_per_year
     ORDER BY total_operations_per_year DESC;
+    ```
+
+    Add connection relations between stops
+    ```cypher
+    // Consider each pair of stops that appears consecutively in some trip t
+    MATCH (t:Trip:SubwayTrip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
+          (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
+    WHERE st2.stop_sequence = st1.stop_sequence + 1
+    // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
+    MATCH (t)-[:OPERATING_ON]->(service:Service)
+    WITH s1, s2,
+      sum(service.operations_per_year) as total_operations_per_year
+    // Create the respective relationship with yearly operations
+    CREATE (s1)-[:HAS_SUBWAY_CONNECTION_TO {yearly: total_operations_per_year}]->(s2)
     ```
     """
     )
