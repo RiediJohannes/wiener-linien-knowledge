@@ -82,6 +82,7 @@ def _(mo):
 
 @app.cell
 def detect_station_exits(graph):
+    print("Merging related clusters...")
     _updated_clusters: int = graph.merge_related_clusters()
     print(f"Updated {_updated_clusters} stop clusters")
 
@@ -97,13 +98,23 @@ def detect_station_exits(graph):
         print("✅ No node is in two clusters")
 
     """
+    MATCH (s:Stop)-[:IN_CLUSTER]->(p:Stop)
+    WHERE NOT apoc.label.exists(p, "ClusterStop")
+    RETURN s.id, p.id
+    """
+    _result = graph.execute_query(_query)
+    if not _result:
+        print("✅ Every cluster parent has the label 'ClusterStop'")   
+
+    """
     MATCH (s:ClusterStop)-[:IN_CLUSTER*1..5]-(p:ClusterStop)
     WHERE s.id <> p.id
     RETURN s.id, p.id
     """
     _result = graph.execute_query(_query)
     if not _result:
-        print("✅ No cluster has more than one parent (ClusterStop)")
+        print("✅ No cluster has more than one ClusterStop")
+
     return
 
 
@@ -162,14 +173,27 @@ def _(mo):
     mo.md(
         r"""
     Additionally, we define:
-    > For any stop $s$, if there is another stop $s'$ such that $s'$ is close/nearby to a subdistrict $d$ and $s$ functions as $s'$, then
-    then $s$ is also close/nearby to d.
+    > For any cluster $C$, if **there exists** a stop $s \in C$ such that $s$ is **located nearby** a subdistrict $d$, then the cluster stop $c \in C$ is also considered nearby $d$.
 
-    This can be solved entirely with a cypher query:
+    As well as:
+    > For any cluster $C$, if **at least half** of the stops in $C$ are **located in** a subdistrict $d$, then the cluster stop $c \in C$ is also considered to be located in $d$.
+
+    This can be solved using two simple cypher queries:
     ```cypher
-    MATCH (s:Stop)-[f:FUNCTIONS_AS]->(t:Stop)-[l:LOCATED_IN|LOCATED_NEARBY]->(d:SubDistrict)
-    WHERE NOT (s)-[:LOCATED_NEARBY]->(d)
-    MERGE (s)-[:LOCATED_NEARBY]->(d);
+    MATCH (s:Stop)-[:IN_CLUSTER]->(c:ClusterStop),
+          (s)-[:LOCATED_NEARBY]->(d:SubDistrict)
+    WHERE NOT (c)-[:LOCATED_NEARBY]->(d)
+    MERGE (c)-[:LOCATED_NEARBY]->(d);
+    ```
+
+    ```cypher
+    MATCH (c:ClusterStop)<-[:IN_CLUSTER]-(s:Stop)
+    WITH c, count(s) as clusterSize
+    MATCH (c)<-[:IN_CLUSTER]-(s:Stop)-[:LOCATED_IN]->(d:SubDistrict)
+    WHERE NOT (c)-[:LOCATED_IN]->(d)
+    WITH c, d, count(s) as stopsInDistrict, clusterSize
+    WHERE stopsInDistrict >= clusterSize / 2
+    MERGE (c)-[:LOCATED_IN]->(d)
     ```
     """
     )
