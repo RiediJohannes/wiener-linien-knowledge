@@ -4,7 +4,7 @@ __generated_with = "0.15.2"
 app = marimo.App(width="medium", app_title="", css_file="styles/notebook.css")
 
 
-@app.cell
+@app.cell(hide_code=True)
 def imports():
     import marimo as mo
 
@@ -14,7 +14,7 @@ def imports():
     return geo, graph, mo
 
 
-@app.cell
+@app.cell(hide_code=True)
 def project_heading(mo):
     mo.callout(mo.md("""
     # 🚊 Wiener Linien Knowledge Graph 🚋
@@ -22,7 +22,7 @@ def project_heading(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
@@ -60,12 +60,15 @@ def merging_nearby_stops(geo, graph):
 
     _stop_clusters = geo.find_stop_clusters(_stops, 200, 400)
     print(f"Detected {len(_stop_clusters)} clusters of stops")
+
     _summary = graph.cluster_stops(_stop_clusters)
-    print(f"Created {_summary.counters.relationships_created} relationships")
+    print(f"""\nOperation successful:
+    Created {_summary.counters.relationships_created} relationships
+    Added {_summary.counters.labels_added} labels""")
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
@@ -79,21 +82,32 @@ def _(mo):
 
 @app.cell
 def detect_station_exits(graph):
-    _operation = """
-    MATCH (s:Stop), (t:Stop)
-    WHERE s.id < t.id
-      AND split(s.id, ':')[0..3] = split(t.id, ':')[0..3]
-      AND split(s.id, ':')[4] <> split(t.id, ':')[4]
-    MERGE (s)-[:FUNCTIONS_AS]->(t)
-    MERGE (t)-[:FUNCTIONS_AS]->(s);
-    """
+    _updated_clusters: int = graph.merge_related_clusters()
+    print(f"Updated {_updated_clusters} stop clusters")
 
-    _summary = graph.execute_operation(_operation)
-    print(f"Created {_summary.counters.relationships_created} FUNCTIONS_AS relationships")
+    # Since this is such a complex operation, we verify that everything worked as expected
+    print("\nVerifying integrity...")
+    _query = """
+    MATCH (s:Stop)-[:IN_CLUSTER]->(a), (s:Stop)-[:IN_CLUSTER]->(b)
+    WHERE a.id <> b.id
+    RETURN s.id, a.id, b.id
+    """
+    _result = graph.execute_query(_query)
+    if not _result:
+        print("✅ No node is in two clusters")
+
+    """
+    MATCH (s:ClusterStop)-[:IN_CLUSTER*1..5]-(p:ClusterStop)
+    WHERE s.id <> p.id
+    RETURN s.id, p.id
+    """
+    _result = graph.execute_query(_query)
+    if not _result:
+        print("✅ No cluster has more than one parent (ClusterStop)")
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
@@ -120,7 +134,7 @@ def _(graph):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""Next, we use the geographic coordinates of the stops to match each stop to the Viennese registration districts that either contain the stop or are reasonably close to it.""")
     return
@@ -143,7 +157,7 @@ def match_stops_with_districts(geo, graph):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
@@ -175,7 +189,7 @@ def functions_entails_vicinity(graph):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
@@ -260,22 +274,23 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
     Roughly calculate how many times a single trip is operated per year: 
     ```cypher
     MATCH (s:Service)
-    // Calculate how many times a year the trip is operated regularly
+    // Calculate (approximately) how many times a year the trip is operated regularly
     WITH s,
         s.monday + s.tuesday + s.wednesday + s.thursday + s.friday + s.saturday + s.sunday AS days_per_week,
         duration.inDays(s.start_date, s.end_date).days + 1 AS operational_days
     WITH s,
         toInteger(ceil((operational_days / 7.0) * days_per_week)) as regular_operations_per_year
-    // If there are some exception to the schedule, subtract them
+    // If there are some exceptions to the schedule, subtract them
     OPTIONAL MATCH (s)<-[:FOR_SERVICE]-(ex:ServiceException:RemovedService)
     WITH s, regular_operations_per_year, count(DISTINCT ex.date) AS removed_days
+    // Store the result in a property of each schedule node
     SET s.operations_per_year = regular_operations_per_year - removed_days;
     ```
 
@@ -349,11 +364,6 @@ def _(graph, mo):
     #map.save("stops_map.html")
 
     mo.iframe(map._repr_html_(), height=600)
-    return
-
-
-@app.cell
-def _():
     return
 
 

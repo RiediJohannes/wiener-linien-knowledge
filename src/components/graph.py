@@ -134,25 +134,74 @@ def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_st
     results = execute_query(query, dist_num=district_code, subdist_num=subdistrict_code)
     return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
 
-
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
-    all_stop_pairs = []
-    for cluster in stop_clusters:
-        pairs = [(stop1, stop2) for i, stop1 in enumerate(cluster)
-                 for stop2 in cluster[i+1:]]
-        all_stop_pairs.extend(pairs)
-
-    if all_stop_pairs:
+    if stop_clusters and len(stop_clusters[0]) > 0:
         operation = """
-        UNWIND $all_pairs AS pair
-        MERGE (s1:Stop {id: pair[0]})
-        MERGE (s2:Stop {id: pair[1]})
-        MERGE (s1)-[:FUNCTIONS_AS]->(s2)
-        MERGE (s2)-[:FUNCTIONS_AS]->(s1)
+        UNWIND $cluster_list AS cluster
+          UNWIND cluster AS stopId
+            MATCH (stop:Stop {id: stopId})
+            WITH cluster, collect(stop) AS clusterMembers
+            WITH cluster, clusterMembers, clusterMembers[0] AS mainStop
+            // Mark the main stop as the representative for the cluster
+            SET mainStop:ClusterStop
+            // Connect all stops in the cluster to the main stop
+            FOREACH (member IN clusterMembers | MERGE (member)-[:IN_CLUSTER]->(mainStop))
         """
-        return execute_operation(operation, all_pairs=all_stop_pairs)
+        return execute_operation(operation, cluster_list=stop_clusters)
 
     return None
+
+def merge_related_clusters() -> int:
+    operation = """
+    // Find stops that are related according to their ID but not in the same cluster
+    MATCH (left:Stop)
+    WITH left, split(left.id, ':') as parts
+    WITH left, parts[0] + ':' + parts[1] + ':' + parts[2] + ':' + parts[3] + ':' as prefix
+    MATCH (right:Stop)
+    WHERE right.id STARTS WITH prefix
+      AND right.id <> left.id
+      AND NOT (left)-[:IN_CLUSTER]->()<-[:IN_CLUSTER]-(right)
+    
+    // Check if they already have a cluster parent
+    OPTIONAL MATCH (left)-[:IN_CLUSTER]->(leftParent:Stop)
+    OPTIONAL MATCH (right)-[:IN_CLUSTER]->(rightParent:Stop)
+    
+    // Handle the four different cases to put the two nodes into the same cluster
+    WITH left, right, leftParent, rightParent
+    CALL apoc.do.case([
+        // Case 1: left has parent, right is orphan
+        leftParent IS NOT NULL AND rightParent IS NULL,
+        'MERGE (right)-[:IN_CLUSTER]->(leftParent)
+         RETURN 1 as result',
+        
+        // Case 2: right has parent, left is orphan
+        leftParent IS NULL AND rightParent IS NOT NULL,
+        'MERGE (left)-[:IN_CLUSTER]->(rightParent)
+         RETURN 2 as result',
+        
+        // Case 3: both are orphans - make right the parent
+        leftParent IS NULL AND rightParent IS NULL,
+        'SET right:ClusterStop
+         MERGE (left)-[:IN_CLUSTER]->(right)
+         RETURN 3 as result',
+        
+        // Case 4: both have parents - merge clusters
+        leftParent IS NOT NULL AND rightParent IS NOT NULL,
+        'REMOVE leftParent:ClusterStop
+         WITH leftParent, rightParent
+         MATCH (leftParent)<-[rel:IN_CLUSTER]-()
+         CALL apoc.refactor.to(rel, rightParent) YIELD output
+         RETURN 4 as result'
+      ],
+      '', // else clause (will never be reached)
+      {left: left, right: right, leftParent: leftParent, rightParent: rightParent}
+    ) YIELD value
+    
+    RETURN count(*) as mergedClusters
+    """
+
+    result = execute_query(operation)
+    return int(result[0][0]) if result else 0
 
 def connect_stop_to_subdistricts(stops_with_districts: list[tuple[str, list[str]]], relation_name: str) -> ResultSummary | None:
     # Prepare the data as a list of dictionaries for neo4j's UNWIND operation
