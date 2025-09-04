@@ -200,8 +200,7 @@ def merge_related_clusters() -> int:
     RETURN count(*) as mergedClusters
     """
 
-    result = execute_query(operation)
-    return int(result[0][0]) if result else 0
+    return execute_operation_returning_count(operation)
 
 def connect_stop_to_subdistricts(stops_with_districts: list[tuple[str, list[str]]], relation_name: str) -> ResultSummary | None:
     # Prepare the data as a list of dictionaries for neo4j's UNWIND operation
@@ -251,3 +250,11 @@ def execute_query(cypher_query, **params) -> list[Record]:
     except Exception as e:
         print(f"Database query failed with error: {e}")
         return []
+
+def execute_operation_returning_count(cypher_query_returning_count, **params) -> int:
+    """
+    Runs a cypher query that executes some create/update/delete operations on the connected neo4j instance
+    and returns an integer, most commonly the number of affected rows.
+    """
+    result = execute_query(cypher_query_returning_count, **params)
+    return int(result[0][0]) if result else 0

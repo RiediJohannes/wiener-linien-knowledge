@@ -46,7 +46,7 @@ def _(mo):
     # Knowledge graph evolution
     Next, we obtain new knowledge from our data.
 
-    ## Merging nearby stops
+    ## Merging geographically related stops
     In the first step, we detect all groups of nearby stops that practically function like one unified stop.
     """
     )
@@ -72,7 +72,9 @@ def merging_nearby_stops(geo, graph):
 def _(mo):
     mo.md(
         r"""
-    This bundles lots of stops that are geographically very close to each other, while still enforcing some upper limits on the diameter of such clusters to prevent the formation of long chains. However, these constraints might still rip apart some stations whose individual exits or platforms are particularly far apart.
+    This bundles lots of stops that are geographically very close to each other, while still enforcing some upper limits on the diameter of such clusters to prevent the formation of long chains. However, these constraints might consider some stops (exits/platforms) separate that officially belong to the same station but are particularly far apart.
+
+    ### Merging hierarchichally related stops
 
     Luckily, the Wiener Linien used somewhat of a hierarchichal structure when assigning unique IDs to their stops. In particular, the IDs consist of five components delimited by a colon, where the last (fifth) component denotes the respective exit/platform of a station. Using these semantics, we can further improve our stop clustering and stitch together all platforms/exits of each station.
     """
@@ -115,6 +117,47 @@ def detect_station_exits(graph):
     if not _result:
         print("✅ No cluster has more than one ClusterStop")
 
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ### Finding representative cluster parents
+
+    So far, we have organized related stops into clusters that are represented by a parent node with the tag `ClusterStop`. However, the choice of this cluster stop was merely arbitrary. Now, we want to determine a rightful representative by choosing the stop with the most traffic among all stops in the cluster.
+
+    Therefore, we count the stop times scheduled for each cluster and make the busiest stop the new cluster stop.
+    """
+    )
+    return
+
+
+@app.cell
+def reassign_cluster_stops(graph):
+    _operation = """
+    // For each cluster, rank members by usage
+    MATCH (stop:Stop)-[:IN_CLUSTER]->(parent:ClusterStop)
+    OPTIONAL MATCH (stop)<-[:AT_STOP]-(st:StopTime)
+    WITH parent, stop, count(st) AS usageCount
+    ORDER BY parent, usageCount DESC, stop.id ASC
+    WITH parent, collect(stop) AS clusterMembers
+    WITH parent, clusterMembers, clusterMembers[0] AS mainStop
+    WHERE parent.id <> mainStop.id
+
+    // Assign a new parent for the cluster
+    REMOVE parent:ClusterStop // Demote old cluster stop
+    SET mainStop:ClusterStop  // Promote the busiest stop
+    WITH parent, mainStop
+    MATCH (n)-[rel:IN_CLUSTER]->(parent)
+    CALL apoc.refactor.to(rel, mainStop) YIELD output
+    RETURN count(*)
+    """
+
+    print("Re-assigning cluster stops...")
+    _affected_rows = graph.execute_operation_returning_count(_operation)
+    print(f"Affected {_affected_rows} nodes")
     return
 
 
@@ -203,13 +246,28 @@ def _(mo):
 @app.cell
 def functions_entails_vicinity(graph):
     _operation = """
-    MATCH (s:Stop)-[f:FUNCTIONS_AS]->(t:Stop)-[l:LOCATED_IN|LOCATED_NEARBY]->(d:SubDistrict)
-    WHERE NOT (s)-[:LOCATED_NEARBY]->(d)
-    MERGE (s)-[:LOCATED_NEARBY]->(d);
+    MATCH (s:Stop)-[:IN_CLUSTER]->(c:ClusterStop),
+          (s)-[:LOCATED_NEARBY]->(d:SubDistrict)
+    WHERE NOT (c)-[:LOCATED_NEARBY]->(d)
+    MERGE (c)-[:LOCATED_NEARBY]->(d);
     """
 
     _summary = graph.execute_operation(_operation)
     print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+
+
+    _operation = """
+    MATCH (c:ClusterStop)<-[:IN_CLUSTER]-(s:Stop)
+    WITH c, count(s) as clusterSize
+    MATCH (c)<-[:IN_CLUSTER]-(s:Stop)-[:LOCATED_IN]->(d:SubDistrict)
+    WHERE NOT (c)-[:LOCATED_IN]->(d)
+    WITH c, d, count(s) as stopsInDistrict, clusterSize
+    WHERE stopsInDistrict >= clusterSize / 2
+    MERGE (c)-[:LOCATED_IN]->(d)
+    """
+
+    _summary = graph.execute_operation(_operation)
+    print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
     return
 
 
