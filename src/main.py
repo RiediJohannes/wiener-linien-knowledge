@@ -167,7 +167,7 @@ def _(mo):
         r"""
     ### Move transport-related relationships to cluster stop
 
-    Now that we have 
+    Now that we have
     """
     )
     return
@@ -432,19 +432,24 @@ def _(graph, mo):
 
     # Create a folium map centered on the mean of the coordinates
     map = folium.Map(
+        tiles=None,
         #tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
         #attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        tiles='https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
-        attr='&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         location=[48.2202331, 16.3796424],
         zoom_start=11
     )
+
+    # Add map as base layer
+    folium.TileLayer("https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png",
+                    attr='&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    name="Stadiamaps", overlay=False).add_to(map)
 
     # Add layers to show/hide markers
     stop_marks = folium.FeatureGroup(name="Stop markers", control=True, show=True).add_to(map)
     cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=False).add_to(map)
     folium.LayerControl().add_to(map)
 
+    # Create panes to put differnt markers on different z-indexes
     folium.map.CustomPane("stops", z_index=600).add_to(map)
     folium.map.CustomPane("clusters", z_index=450).add_to(map)
 
@@ -476,7 +481,7 @@ def _(graph, mo):
     # Save the map to an HTML file
     #map.save("stops_map.html")
 
-    mo.iframe(map._repr_html_(), height=600)
+    mo.iframe(map._repr_html_(), height=650)
     return
 
 

@@ -103,7 +103,7 @@ def get_stops() -> list[Stop] | None:
     results = execute_query(query)
     return [Stop(record["id"], record["lat"], record["lon"], record["name"], record["is_cluster"]) for record in results]
 
-def get_stop_cluster(*args, stop_id = None, stop_name = None) -> list[Stop] | None:
+def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
     if stop_id is None and stop_name is None:
         return get_stops()
 
