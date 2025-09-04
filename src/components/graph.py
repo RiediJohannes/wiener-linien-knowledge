@@ -8,11 +8,12 @@ driver = GraphDatabase.driver(URI, auth=AUTH)
 
 
 class Stop:
-    def __init__(self, stop_id: str, latitude: float, longitude: float, name: str):
+    def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, is_cluster = False):
         self.id: str = stop_id
         self.lat: float = latitude
         self.lon: float = longitude
         self.name: str = name
+        self.is_cluster = is_cluster
 
 class SubDistrict:
     def __init__(self, district_num: int, subdistrict_num: int, population: int, area: float, shape: str):
@@ -96,10 +97,11 @@ def get_stops() -> list[Stop] | None:
     RETURN s.id as id,
            s.lat as lat,
            s.lon as lon,
-           s.name as name;
+           s.name as name,
+           apoc.label.exists(s, "ClusterStop") as is_cluster;
     """
     results = execute_query(query)
-    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+    return [Stop(record["id"], record["lat"], record["lon"], record["name"], record["is_cluster"]) for record in results]
 
 def get_stop_cluster(*args, stop_id = None, stop_name = None) -> list[Stop] | None:
     if stop_id is None and stop_name is None:

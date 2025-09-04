@@ -141,7 +141,7 @@ def reassign_cluster_stops(graph):
     MATCH (stop:Stop)-[:IN_CLUSTER]->(parent:ClusterStop)
     OPTIONAL MATCH (stop)<-[:AT_STOP]-(st:StopTime)
     WITH parent, stop, count(st) AS usageCount
-    ORDER BY parent, usageCount DESC, stop.id ASC
+    ORDER BY parent, usageCount DESC, stop.name DESC, stop.id ASC
     WITH parent, collect(stop) AS clusterMembers
     WITH parent, clusterMembers, clusterMembers[0] AS mainStop
     WHERE parent.id <> mainStop.id
@@ -158,6 +158,18 @@ def reassign_cluster_stops(graph):
     print("Re-assigning cluster stops...")
     _affected_rows = graph.execute_operation_returning_count(_operation)
     print(f"Affected {_affected_rows} nodes")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ### Move transport-related relationships to cluster stop
+
+    Now that we have 
+    """
+    )
     return
 
 
@@ -235,7 +247,7 @@ def _(mo):
     MATCH (c)<-[:IN_CLUSTER]-(s:Stop)-[:LOCATED_IN]->(d:SubDistrict)
     WHERE NOT (c)-[:LOCATED_IN]->(d)
     WITH c, d, count(s) as stopsInDistrict, clusterSize
-    WHERE stopsInDistrict >= clusterSize / 2
+    WHERE stopsInDistrict >= clusterSize / 2 OR stopsInDistrict >= 3
     MERGE (c)-[:LOCATED_IN]->(d)
     ```
     """
@@ -262,7 +274,7 @@ def functions_entails_vicinity(graph):
     MATCH (c)<-[:IN_CLUSTER]-(s:Stop)-[:LOCATED_IN]->(d:SubDistrict)
     WHERE NOT (c)-[:LOCATED_IN]->(d)
     WITH c, d, count(s) as stopsInDistrict, clusterSize
-    WHERE stopsInDistrict >= clusterSize / 2
+    WHERE stopsInDistrict >= clusterSize / 2 OR stopsInDistrict >= 3
     MERGE (c)-[:LOCATED_IN]->(d)
     """
 
@@ -414,9 +426,9 @@ def _(graph, mo):
     import folium
     import pandas as pd
 
-    #_stops = graph.get_stops()
+    _stops = graph.get_stops()
     #_stops = graph.get_stop_cluster(stop_name='Meidling')
-    _stops = graph.get_stops_for_subdistrict(11, 2)
+    #_stops = graph.get_stops_for_subdistrict(11, 2)
 
     # Create a folium map centered on the mean of the coordinates
     map = folium.Map(
@@ -428,6 +440,14 @@ def _(graph, mo):
         zoom_start=11
     )
 
+    # Add layers to show/hide markers
+    stop_marks = folium.FeatureGroup(name="Stop markers", control=True, show=True).add_to(map)
+    cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=False).add_to(map)
+    folium.LayerControl().add_to(map)
+
+    folium.map.CustomPane("stops", z_index=600).add_to(map)
+    folium.map.CustomPane("clusters", z_index=450).add_to(map)
+
     # Add markers for each stop
     for stop in _stops:
         folium.CircleMarker(
@@ -438,9 +458,20 @@ def _(graph, mo):
             fill_opacity=0.4,
             opacity=0.6,
             popup=stop.name,
-            tooltip=stop.id
-        ).add_to(map)
+            tooltip=stop.id,
+            pane="stops"
+        ).add_to(stop_marks)
 
+        if stop.is_cluster:
+            folium.CircleMarker(
+                location=[stop.lat, stop.lon],
+                radius=12,
+                color="violet",
+                fill=True,
+                fill_opacity=0.2,
+                opacity=0.2,
+                pane="clusters"
+            ).add_to(cluster_marks)
 
     # Save the map to an HTML file
     #map.save("stops_map.html")
