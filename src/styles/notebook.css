@@ -34,3 +34,12 @@ blockquote {
 blockquote .arithmatex {
   line-height: 1.3em;
 }
+
+/* Affect only inline code */
+.markdown code:not(pre code) {
+    border-radius: 5px;
+    /*-moz-border-radius: 5px;*/
+    /*-webkit-border-radius: 5px;*/
+    padding: 2px 5px;
+    background-color: #eef;
+}

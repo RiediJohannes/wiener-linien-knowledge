@@ -398,7 +398,11 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
-    Roughly calculate how many times a single trip is operated per year: 
+    ### Determine connections between stops
+
+    Our next main goal is to detect the **frequency of a direct public transport connections** from one stop to another. In the end, we would like every stop `s` in our graph to contain relationships of the form `(s)-[:X_CONNECTS_TO]->(t)` for every stop `t` it has a _direct_ connection to at least once per year, where `X` is replaced by the mode of transport ($X \in \{\texttt{BUS}, \texttt{TRAM}, \texttt{SUBWAY}\}$).
+
+    For that, we first calculate an approximation of the number of times a single trip is operated per year: 
     ```cypher
     MATCH (s:Service)
     // Calculate (approximately) how many times a year the trip is operated regularly
@@ -414,6 +418,48 @@ def _(mo):
     SET s.operations_per_year = regular_operations_per_year - removed_days;
     ```
 
+    The value obtained by this query is not the exact number of trips in the year 2024, since it only considers the number of weeks in a year instead of the exact number of Mondays, Tuesdays, etc. in the year 2024. However, the numbers should be within roughly $2\%$ of the true value and basically represent a year-on-year average for each trip.
+    """
+    )
+    return
+
+
+@app.cell
+def calculate_trips_per_year(graph):
+    _operation = """
+    MATCH (s:Service)
+    // Calculate (approximately) how many times a year the trip is operated regularly
+    WITH s,
+        s.monday + s.tuesday + s.wednesday + s.thursday + s.friday + s.saturday + s.sunday AS days_per_week,
+        duration.inDays(s.start_date, s.end_date).days + 1 AS operational_days
+    WITH s,
+        toInteger(ceil((operational_days / 7.0) * days_per_week)) as regular_operations_per_year
+    // If there are some exceptions to the schedule, subtract them
+    OPTIONAL MATCH (s)<-[:FOR_SERVICE]-(ex:ServiceException:RemovedService)
+    WITH s, regular_operations_per_year, count(DISTINCT ex.date) AS removed_days
+    // Store the result in a property of each schedule node
+    SET s.operations_per_year = regular_operations_per_year - removed_days;
+    """
+
+    print("Calculating operations per year for every trip...")
+    _summary = graph.execute_operation(_operation)
+    print(f"Calculated and (re)set {_summary.counters.properties_set} properties")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    Next, we find every pair of stops $(s1, s2)$ such that some trip $t$ directly connects $s1$ to $s2$ (in that order). We aggregate over all such trips $t$ and sum their operations per year to get the total number of direct connections $s1 \to s2$ in a year.  
+    Note that such trips do not necessarily move between the exact stops $s1$ and $s2$ but between two stops within their (separate) clusters, as we have previously moved all `:AT_STOP` relationships to a cluster's root node.
+
+    A quick word about the `WHERE` clause:
+
+    - `s1.id <> s2.id` -- This guarantees that we ignore trips within a cluster to prevent overcounting, since our bundling of stops may have lead to sequential stops being part of the same cluster (and thus the `:AT_STOP` relationship was redirected to the same root node) .
+    - `st2.stop_sequence = st1.stop_sequence + 1` -- This ensures we only consider _direct_ connections between stops.
+
+  
     **Important:** Calculate direct connections per year between each stop pair: 
     ```cypher
     // Consider each pair of stops that appears consecutively in some trip t
@@ -448,12 +494,24 @@ def _(mo):
 
 
 @app.cell
+def _(graph):
+    _operation = """
+
+    """
+
+    print("")
+    _summary = graph.execute_operation(_operation)
+    print(f"Calculated and (re)set {_summary.counters.properties_set} properties")
+    return
+
+
+@app.cell
 def _(graph, mo):
     import folium
 
     #_stops = graph.get_stops()
-    _stops = graph.get_stop_cluster(stop_name='Westbahnhof')
-    #_stops = graph.get_stops_for_subdistrict(11, 2)
+    #_stops = graph.get_stop_cluster(stop_name='Undsetgasse')
+    _stops = graph.get_stops_for_subdistrict(11, 2)
 
     # Create a folium map centered on the mean of the coordinates
     map = folium.Map(
