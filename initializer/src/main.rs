@@ -43,24 +43,31 @@ async fn main() {
 
     println!("Importing GTFS data into Neo4j ...");
     println!("-- Creating indexes for GTFS node types");
-    let index_queries = [
-        "(r:Route) ON (r.id)",
-        "(s:Service) ON (s.id)",
-        "(ex:ServiceException) ON (ex.service_id)",
-        "(t:Trip) ON (t.id)",
-        "(s:Stop) ON (s.id);",
-        "(s:Stop) ON (s.lon);",
-        "(s:Stop) ON (s.lat);",
-        "(st:StopTime) ON (st.trip_id)",
-        "(st:StopTime) ON (st.stop_id)",
-        "(st:StopTime) ON (st.stop_sequence)",
+    // Note: Uniqueness constraints implicitly create indexes
+    let uniqueness_constraints = [
+        ("(r:Route)",   "r.id"),
+        ("(s:Service)", "s.id"),
+        ("(t:Trip)",    "t.id"),
+        ("(s:Stop)",    "s.id"),
     ];
-    for index_target in index_queries {
-        graph
-            .run(neo4rs::query(&format!(
-                "{} {}",
-                "CREATE INDEX IF NOT EXISTS FOR", index_target
-            )))
+    for (node, prop) in uniqueness_constraints {
+        graph.run(neo4rs::query(&format!(
+            "CREATE CONSTRAINT IF NOT EXISTS FOR {} REQUIRE {} IS NODE KEY", node, prop)))
+            .await
+            .unwrap_or_else(|e| panic!("Failed to create uniqueness constraint.\nError: {}", e));
+    }
+
+    let index_queries = [
+        ("(ex:ServiceException)", "(ex.service_id)"),
+        ("(s:Stop)", "(s.lon);"),
+        ("(s:Stop)", "(s.lat);"),
+        ("(st:StopTime)", "(st.trip_id)"),
+        ("(st:StopTime)", "(st.stop_id)"),
+        ("(st:StopTime)", "(st.stop_sequence)"),
+    ];
+    for (node, prop) in index_queries {
+        graph.run(neo4rs::query(&format!(
+            "CREATE INDEX IF NOT EXISTS FOR {} ON {}", node, prop)))
             .await
             .unwrap_or_else(|e| panic!("Failed to create indexes.\nError: {}", e));
     }
