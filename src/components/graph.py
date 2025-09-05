@@ -29,6 +29,16 @@ class SubDistrict:
         self.area: float = area
         self.shape: str = shape
 
+STOP_RETURN_STATEMENT: str = """RETURN DISTINCT
+    s.id as id,
+    s.lat as lat,
+    s.lon as lon,
+    s.name as name,
+    apoc.label.exists(s, "ClusterStop") as is_cluster,
+    s.cluster_lat as cluster_lat,
+    s.cluster_lon as cluster_lon;
+    """
+
 
 def import_city_data():
     execute_operation("CREATE INDEX IF NOT EXISTS FOR (s:SubDistrict) ON (s.district_num);")
@@ -99,70 +109,45 @@ def get_subdistricts() -> list[SubDistrict]:
     ) for record in results]
 
 def get_stops() -> list[Stop] | None:
-    stops_query = """
+    stops_query = f"""
     MATCH (s:Stop)
-    WHERE NOT (s:ClusterStop)
-    RETURN s.id as id,
-           s.lat as lat,
-           s.lon as lon,
-           s.name as name
+    {STOP_RETURN_STATEMENT}
     """
-    stops_result = execute_query(stops_query)
-    stops = [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in stops_result]
 
-    clusters_query = """
-    MATCH (c:ClusterStop)
-    RETURN c.id as id,
-           c.lat as lat,
-           c.lon as lon,
-           c.name as name,
-           c.cluster_lat as cluster_lat,
-           c.cluster_lon as cluster_lon
-    """
-    clusters_result = execute_query(clusters_query)
-    clusters = [ClusterStop(record["id"], record["lat"], record["lon"], record["name"],
-                            record["cluster_lat"], record["cluster_lon"])
-                for record in clusters_result]
-
-    return stops + clusters
+    response = execute_query(stops_query)
+    return _parse_stops_from_response(response)
 
 def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
     if stop_id is None and stop_name is None:
         return get_stops()
 
-    where_clause: str = f"s.id = '{stop_id}'" if stop_id is not None else f"s.name = '{stop_name}'"
+    where_clause: str = f"start.id = '{stop_id}'" if stop_id is not None else f"start.name = '{stop_name}'"
 
     query = f"""
-    MATCH (s:Stop)
+    MATCH (start:Stop)
     WHERE {where_clause}
-    OPTIONAL MATCH (s)-[:IN_CLUSTER]->(c:Stop)<-[:IN_CLUSTER]-(d:Stop)
+    OPTIONAL MATCH (start)-[:IN_CLUSTER]->(c:Stop)<-[:IN_CLUSTER]-(d:Stop)
     
-    WITH s, c, collect(d) AS others
-    UNWIND [s, c] + others AS node
-    WITH node
-    WHERE node IS NOT NULL
-    RETURN DISTINCT
-        node.id AS id,
-        node.lat AS lat,
-        node.lon AS lon,
-        node.name AS name;
+    WITH start, c, collect(d) AS others
+    UNWIND [start, c] + others AS s
+    WITH s
+    WHERE s IS NOT NULL
+    {STOP_RETURN_STATEMENT}
     """
 
-    results = execute_query(query)
-    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+    response = execute_query(query)
+    return _parse_stops_from_response(response)
 
 def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_stops_within = False) -> list[Stop] | None:
     query = f"""
     MATCH (d:SubDistrict)
     WHERE d.district_num = $dist_num AND d.sub_district_num = $subdist_num
     MATCH (s:Stop)-[:{"LOCATED_IN" if only_stops_within else "LOCATED_NEARBY"}]->(d)
-    RETURN s.id as id,
-           s.lat as lat,
-           s.lon as lon,
-           s.name as name;
+    {STOP_RETURN_STATEMENT}
     """
-    results = execute_query(query, dist_num=district_code, subdist_num=subdistrict_code)
-    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+
+    response = execute_query(query, dist_num=district_code, subdist_num=subdistrict_code)
+    return _parse_stops_from_response(response)
 
 
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
@@ -289,3 +274,14 @@ def execute_operation_returning_count(cypher_query_returning_count, **params) ->
     """
     result = execute_query(cypher_query_returning_count, **params)
     return int(result[0][0]) if result else 0
+
+def _parse_stops_from_response(response: list[Record]) -> list[Stop]:
+    stops: list[Stop] = []
+    for record in response:
+        if record["is_cluster"]:
+            stops.append(ClusterStop(record["id"], record["lat"], record["lon"], record["name"],
+                                     record["cluster_lat"], record["cluster_lon"]))
+        else:
+            stops.append(Stop(record["id"], record["lat"], record["lon"], record["name"]))
+
+    return stops

@@ -513,9 +513,9 @@ def _(graph):
 def _(graph, mo):
     import folium
 
-    #_stops = graph.get_stops()
-    _stops = graph.get_stop_cluster(stop_name='Leberweg')
-    #_stops = graph.get_stops_for_subdistrict(11, 2)
+    _stops = graph.get_stops()
+    #_stops = graph.get_stop_cluster(stop_name='Possingergasse')
+    #_stops = graph.get_stops_for_subdistrict(16, 10)
 
     # Create a folium map centered on the mean of the coordinates
     map = folium.Map(
