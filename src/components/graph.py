@@ -126,25 +126,30 @@ def get_stops() -> list[Stop] | None:
 
     return stops + clusters
 
-# def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
-#     if stop_id is None and stop_name is None:
-#         return get_stops()
-#
-#     where_clause: str = f"s.id = '{stop_id}'" if stop_id is not None else f"s.name = '{stop_name}'"
-#
-#     query = f"""
-#     MATCH (s:Stop)
-#     WHERE {where_clause}
-#     MATCH (s)-[:FUNCTIONS_AS*0..5]->(t:Stop)
-#     RETURN DISTINCT
-#         t.id as id,
-#         t.lat as lat,
-#         t.lon as lon,
-#         t.name as name;
-#     """
-#
-#     results = execute_query(query)
-#     return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
+    if stop_id is None and stop_name is None:
+        return get_stops()
+
+    where_clause: str = f"s.id = '{stop_id}'" if stop_id is not None else f"s.name = '{stop_name}'"
+
+    query = f"""
+    MATCH (s:Stop)
+    WHERE {where_clause}
+    OPTIONAL MATCH (s)-[:IN_CLUSTER]->(c:Stop)<-[:IN_CLUSTER]-(d:Stop)
+    
+    WITH s, c, collect(d) AS others
+    UNWIND [s, c] + others AS node
+    WITH node
+    WHERE node IS NOT NULL
+    RETURN DISTINCT
+        node.id AS id,
+        node.lat AS lat,
+        node.lon AS lon,
+        node.name AS name;
+    """
+
+    results = execute_query(query)
+    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
 
 def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_stops_within = False) -> list[Stop] | None:
     query = f"""

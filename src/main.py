@@ -167,7 +167,7 @@ def _(mo):
         r"""
     ### Move transport-related relationships to cluster stop
 
-    Now that we have created clusters with the busiest stop in them as their root node (the `ClusterStop`), we move all `:AT_STOP` relationships of the other nodes in the cluster to that `ClusterStop` instead. 
+    Now that we have created clusters with the busiest stop in them as their root node (the `ClusterStop`), we move all `:AT_STOP` relationships of the other nodes in the cluster to that `ClusterStop` instead.
     """
     )
     return
@@ -190,7 +190,7 @@ def _(graph):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""This concludes our efforts to find clusters of highly related stops and create structures that reflect this close relationship. The new data model greatly simplifies measuring the true importance of certain stops, which will aid us in predicting missing links in the public transport network.""")
     return
@@ -201,7 +201,7 @@ def _(mo):
     mo.md(
         r"""
     ## Matching stops to districts
-    Our next goal is to match each stop to Viennese registration districts they serve.  
+    Our next goal is to match each stop to Viennese registration districts they serve in order to get a rough grasp on how many people can benefit them. 
     First, let's delete stops entirely that are located outside the Vienna city boundary. Most notably, this includes many stops of the _Badner Bahn_ that reach all the way to _Baden bei Wien_.
 
     This is a simple task by relying again on the semantics of the stop IDs. Stops whose ID starts with `at:49` are within Vienna whereas stops with `at:43` at the beginning of their ID are located outside Vienna. Thus, we find and delete the latter.
@@ -350,7 +350,7 @@ def _(mo):
     SET ex: RemovedService;
     ```
 
-    Labelling trips according to their mode of transport:
+    Label trips according to their mode of transport:
     ```cypher
     MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
     WHERE r.type = 0  // enum value for trams or light rail
@@ -389,23 +389,6 @@ def _(mo):
     WHERE NOT (s:SubwayStation)
     SET s: SubwayStation
     ```
-
-    ~~Classifying services based on their days of operation:~~
-    ```cypher
-    MATCH (s:Service)
-    WHERE s.saturday = 1
-    SET s: SaturdayService
-
-    MATCH (s:Service)
-    WHERE s.sunday = 1
-    SET s: SundayService
-
-    MATCH (s:Service)
-    WITH s,
-        s.monday + s.tuesday + s.wednesday + s.thursday + s.friday AS weekday_count
-    WHERE weekday_count >= 3
-    SET s: WeekdayService
-    ```
     """
     )
     return
@@ -436,7 +419,7 @@ def _(mo):
     // Consider each pair of stops that appears consecutively in some trip t
     MATCH (t:Trip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
           (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
-    WHERE st2.stop_sequence = st1.stop_sequence + 1
+    WHERE s1.id <> s2.id AND st2.stop_sequence = st1.stop_sequence + 1
     // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
     MATCH (t)-[:OPERATING_ON]->(service:Service)
     WITH s1, s2,
@@ -468,8 +451,8 @@ def _(mo):
 def _(graph, mo):
     import folium
 
-    _stops = graph.get_stops()
-    #_stops = graph.get_stop_cluster(stop_name='Meidling')
+    #_stops = graph.get_stops()
+    _stops = graph.get_stop_cluster(stop_name='Westbahnhof')
     #_stops = graph.get_stops_for_subdistrict(11, 2)
 
     # Create a folium map centered on the mean of the coordinates
