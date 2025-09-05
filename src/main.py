@@ -167,9 +167,32 @@ def _(mo):
         r"""
     ### Move transport-related relationships to cluster stop
 
-    Now that we have
+    Now that we have created clusters with the busiest stop in them as their root node (the `ClusterStop`), we move all `:AT_STOP` relationships of the other nodes in the cluster to that `ClusterStop` instead. 
     """
     )
+    return
+
+
+@app.cell
+def _(graph):
+    _expensive_operation = """
+    MATCH (time:StopTime)-[at:AT_STOP]->(s:Stop)-[:IN_CLUSTER]->(c:ClusterStop)
+    WHERE s.id <> c.id
+    CALL (at, c) {
+      CALL apoc.refactor.to(at, c) YIELD output
+      RETURN count(output) AS refactoredCount
+    } IN TRANSACTIONS OF 10000 ROWS
+    RETURN sum(refactoredCount) AS movedRelationships
+    """
+
+    _moved_relationships: int = graph.execute_operation_returning_count(_expensive_operation)
+    print(f"Moved a total of {_moved_relationships} :AT_STOP relationships")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""This concludes our efforts to find clusters of highly related stops and create structures that reflect this close relationship. The new data model greatly simplifies measuring the true importance of certain stops, which will aid us in predicting missing links in the public transport network.""")
     return
 
 
@@ -465,7 +488,7 @@ def _(graph, mo):
 
     # Add layers to show/hide markers
     stop_marks = folium.FeatureGroup(name="Stop markers", control=True, show=True).add_to(map)
-    cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=True).add_to(map)
+    cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=False).add_to(map)
     folium.LayerControl().add_to(map)
 
     # Create panes to put differnt markers on different z-indexes
