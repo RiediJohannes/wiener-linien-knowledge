@@ -8,12 +8,19 @@ driver = GraphDatabase.driver(URI, auth=AUTH)
 
 
 class Stop:
-    def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, is_cluster = False):
+    def __init__(self, stop_id: str, latitude: float, longitude: float, name: str):
         self.id: str = stop_id
         self.lat: float = latitude
         self.lon: float = longitude
         self.name: str = name
-        self.is_cluster = is_cluster
+        self.is_cluster = False
+
+class ClusterStop(Stop):
+   def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, cluster_lat: float, cluster_lon: float):
+       super().__init__(stop_id, latitude, longitude, name)
+       self.is_cluster = True
+       self.cluster_lat: float = cluster_lat
+       self.cluster_lon: float = cluster_lon
 
 class SubDistrict:
     def __init__(self, district_num: int, subdistrict_num: int, population: int, area: float, shape: str):
@@ -92,36 +99,52 @@ def get_subdistricts() -> list[SubDistrict]:
     ) for record in results]
 
 def get_stops() -> list[Stop] | None:
-    query = """
+    stops_query = """
     MATCH (s:Stop)
+    WHERE NOT (s:ClusterStop)
     RETURN s.id as id,
            s.lat as lat,
            s.lon as lon,
-           s.name as name,
-           apoc.label.exists(s, "ClusterStop") as is_cluster;
+           s.name as name
     """
-    results = execute_query(query)
-    return [Stop(record["id"], record["lat"], record["lon"], record["name"], record["is_cluster"]) for record in results]
+    stops_result = execute_query(stops_query)
+    stops = [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in stops_result]
 
-def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
-    if stop_id is None and stop_name is None:
-        return get_stops()
-
-    where_clause: str = f"s.id = '{stop_id}'" if stop_id is not None else f"s.name = '{stop_name}'"
-
-    query = f"""
-    MATCH (s:Stop)
-    WHERE {where_clause}
-    MATCH (s)-[:FUNCTIONS_AS*0..5]->(t:Stop)
-    RETURN DISTINCT
-        t.id as id,
-        t.lat as lat,
-        t.lon as lon,
-        t.name as name;
+    clusters_query = """
+    MATCH (c:ClusterStop)
+    RETURN c.id as id,
+           c.lat as lat,
+           c.lon as lon,
+           c.name as name,
+           c.cluster_lat as cluster_lat,
+           c.cluster_lon as cluster_lon
     """
+    clusters_result = execute_query(clusters_query)
+    clusters = [ClusterStop(record["id"], record["lat"], record["lon"], record["name"],
+                            record["cluster_lat"], record["cluster_lon"])
+                for record in clusters_result]
 
-    results = execute_query(query)
-    return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+    return stops + clusters
+
+# def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
+#     if stop_id is None and stop_name is None:
+#         return get_stops()
+#
+#     where_clause: str = f"s.id = '{stop_id}'" if stop_id is not None else f"s.name = '{stop_name}'"
+#
+#     query = f"""
+#     MATCH (s:Stop)
+#     WHERE {where_clause}
+#     MATCH (s)-[:FUNCTIONS_AS*0..5]->(t:Stop)
+#     RETURN DISTINCT
+#         t.id as id,
+#         t.lat as lat,
+#         t.lon as lon,
+#         t.name as name;
+#     """
+#
+#     results = execute_query(query)
+#     return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
 
 def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_stops_within = False) -> list[Stop] | None:
     query = f"""
@@ -135,6 +158,7 @@ def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_st
     """
     results = execute_query(query, dist_num=district_code, subdist_num=subdistrict_code)
     return [Stop(record["id"], record["lat"], record["lon"], record["name"]) for record in results]
+
 
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
     if stop_clusters and len(stop_clusters[0]) > 0:

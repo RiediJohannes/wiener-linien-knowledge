@@ -285,6 +285,26 @@ def functions_entails_vicinity(graph):
 
 @app.cell(hide_code=True)
 def _(mo):
+    mo.md(r"""Lastly, we calculate the average position of all stops in a cluster and store that as the position of the overall cluster in the cluster stop for display purposes.""")
+    return
+
+
+@app.cell
+def _(graph):
+    _operation = """
+    MATCH (s:Stop)-[:IN_CLUSTER]->(c:ClusterStop)
+    WITH c, avg(s.lat) AS cluster_lat, avg(s.lon) AS cluster_lon
+    SET c.cluster_lat = cluster_lat,
+        c.cluster_lon = cluster_lon
+    """
+
+    _summary = graph.execute_operation(_operation)
+    print(f"Set {_summary.counters.properties_set} properties")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
     mo.md(
         r"""
     Pre-calculate population density of all subdistricts:
@@ -424,7 +444,6 @@ def _(mo):
 @app.cell
 def _(graph, mo):
     import folium
-    import pandas as pd
 
     _stops = graph.get_stops()
     #_stops = graph.get_stop_cluster(stop_name='Meidling')
@@ -446,7 +465,7 @@ def _(graph, mo):
 
     # Add layers to show/hide markers
     stop_marks = folium.FeatureGroup(name="Stop markers", control=True, show=True).add_to(map)
-    cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=False).add_to(map)
+    cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=True).add_to(map)
     folium.LayerControl().add_to(map)
 
     # Create panes to put differnt markers on different z-indexes
@@ -469,12 +488,12 @@ def _(graph, mo):
 
         if stop.is_cluster:
             folium.CircleMarker(
-                location=[stop.lat, stop.lon],
-                radius=12,
+                location=[stop.cluster_lat, stop.cluster_lon],
+                radius=15,
                 color="violet",
                 fill=True,
                 fill_opacity=0.2,
-                opacity=0.2,
+                opacity=0.1,
                 pane="clusters"
             ).add_to(cluster_marks)
 
