@@ -332,6 +332,8 @@ def _(mo):
         r"""
     Pre-calculate population density of all subdistricts:
 
+    Since a subdistrict's area is given in m², we multiply the population count by one million to get the population density in people/km².
+
     ```cypher
     MATCH (d:SubDistrict)
     SET d.density = 1_000_000 * d.population / d.area;
@@ -339,7 +341,7 @@ def _(mo):
 
     ### Adding Labels
 
-    Classify service exceptions into additional service and removed service
+    Classify exceptions to the regularly scheduled service into additional and removed service
     ```cypher
     MATCH (ex:ServiceException)
     WHERE ex.exception_type = 1
@@ -454,40 +456,27 @@ def _(mo):
     Next, we find every pair of stops $(s1, s2)$ such that some trip $t$ directly connects $s1$ to $s2$ (in that order). We aggregate over all such trips $t$ and sum their operations per year to get the total number of direct connections $s1 \to s2$ in a year.  
     Note that such trips do not necessarily move between the exact stops $s1$ and $s2$ but between two stops within their (separate) clusters, as we have previously moved all `:AT_STOP` relationships to a cluster's root node.
 
-    A quick word about the `WHERE` clause:
-
-    - `s1.id <> s2.id` -- This guarantees that we ignore trips within a cluster to prevent overcounting, since our bundling of stops may have lead to sequential stops being part of the same cluster (and thus the `:AT_STOP` relationship was redirected to the same root node) .
-    - `st2.stop_sequence = st1.stop_sequence + 1` -- This ensures we only consider _direct_ connections between stops.
-
+    To determine a fine-grained level of service, we differentiate between modes of transport (bus, tram, subway) when creating these connection relationships, and we also store the exact number of operations per year for that connection in the `yearly` property of that relationship.
   
-    **Important:** Calculate direct connections per year between each stop pair: 
     ```cypher
     // Consider each pair of stops that appears consecutively in some trip t
-    MATCH (t:Trip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
+    MATCH (t:Trip:$type_of_trip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
           (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
     WHERE s1.id <> s2.id AND st2.stop_sequence = st1.stop_sequence + 1
     // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
     MATCH (t)-[:OPERATING_ON]->(service:Service)
     WITH s1, s2,
       sum(service.operations_per_year) as total_operations_per_year
-    // Return the calculated values
-    RETURN s1.name as from_stop, s2.name as to_stop, total_operations_per_year
-    ORDER BY total_operations_per_year DESC;
+    // Create a connection relationship with the number of connections per year
+    MERGE (s1)-[conn:$type_of_connection]->(s2)
+    SET conn.yearly = total_operations_per_year
     ```
+    Just be sure to replace the variable `$type_of_trip` and `$type_of_connection` with the correct labels for the respective mode of transport.
 
-    Add connection relations between stops
-    ```cypher
-    // Consider each pair of stops that appears consecutively in some trip t
-    MATCH (t:Trip:SubwayTrip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
-          (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
-    WHERE st2.stop_sequence = st1.stop_sequence + 1
-    // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
-    MATCH (t)-[:OPERATING_ON]->(service:Service)
-    WITH s1, s2,
-      sum(service.operations_per_year) as total_operations_per_year
-    // Create the respective relationship with yearly operations
-    CREATE (s1)-[:HAS_SUBWAY_CONNECTION_TO {yearly: total_operations_per_year}]->(s2)
-    ```
+    A quick word about the `WHERE` clause:
+
+    - `s1.id <> s2.id` -- This guarantees that we ignore trips within a cluster to prevent overcounting, since our bundling of stops may have lead to sequential stops being part of the same cluster (and thus the `:AT_STOP` relationship was redirected to the same root node) .
+    - `st2.stop_sequence = st1.stop_sequence + 1` -- This ensures that we only consider _direct_ connections between stops.
     """
     )
     return
@@ -496,12 +485,27 @@ def _(mo):
 @app.cell
 def _(graph):
     _operation = """
-
+    // Consider each pair of stops that appears consecutively in some trip t
+    MATCH (t:Trip:{type_of_trip})<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
+          (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
+    WHERE s1.id <> s2.id AND st2.stop_sequence = st1.stop_sequence + 1
+    // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
+    MATCH (t)-[:OPERATING_ON]->(service:Service)
+    WITH s1, s2,
+      sum(service.operations_per_year) as total_operations_per_year
+    // Create a connection relationship with the number of connections per year
+    MERGE (s1)-[conn:{type_of_connection}]->(s2)
+    SET conn.yearly = total_operations_per_year
     """
 
-    print("")
-    _summary = graph.execute_operation(_operation)
-    print(f"Calculated and (re)set {_summary.counters.properties_set} properties")
+    _modes_of_transport = [("BusTrip", "BUS_CONNECTS_TO"), ("TramTrip", "TRAM_CONNECTS_TO"), ("SubwayTrip", "SUBWAY_CONNECTS_TO")]
+
+    for trip, connection in _modes_of_transport:
+        print(f"Finding '{trip}' connections...")
+        # We need to do string interpolation here since Neo4j does not allow parameters in labels
+        _query = _operation.format(type_of_trip=trip, type_of_connection=connection)
+        _summary = graph.execute_operation(_query)
+        print(f"Created {_summary.counters.relationships_created} new '{connection}' relationships and set {_summary.counters.properties_set} yearly operations properties")
     return
 
 
@@ -510,8 +514,8 @@ def _(graph, mo):
     import folium
 
     #_stops = graph.get_stops()
-    #_stops = graph.get_stop_cluster(stop_name='Undsetgasse')
-    _stops = graph.get_stops_for_subdistrict(11, 2)
+    _stops = graph.get_stop_cluster(stop_name='Leberweg')
+    #_stops = graph.get_stops_for_subdistrict(11, 2)
 
     # Create a folium map centered on the mean of the coordinates
     map = folium.Map(
