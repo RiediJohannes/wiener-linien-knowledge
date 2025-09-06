@@ -11,7 +11,7 @@ def imports():
     import src.components.graph as graph
     import src.components.geo_spatial as geo
     import src.components.presentation as present
-    return geo, graph, mo
+    return geo, graph, mo, present
 
 
 @app.cell(hide_code=True)
@@ -116,7 +116,6 @@ def detect_station_exits(graph):
     _result = graph.execute_query(_query)
     if not _result:
         print("✅ No cluster has more than one ClusterStop")
-
     return
 
 
@@ -457,7 +456,7 @@ def _(mo):
     Note that such trips do not necessarily move between the exact stops $s1$ and $s2$ but between two stops within their (separate) clusters, as we have previously moved all `:AT_STOP` relationships to a cluster's root node.
 
     To determine a fine-grained level of service, we differentiate between modes of transport (bus, tram, subway) when creating these connection relationships, and we also store the exact number of operations per year for that connection in the `yearly` property of that relationship.
-  
+
     ```cypher
     // Consider each pair of stops that appears consecutively in some trip t
     MATCH (t:Trip:$type_of_trip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
@@ -510,65 +509,17 @@ def _(graph):
 
 
 @app.cell
-def _(graph, mo):
-    import folium
-
-    _stops = graph.get_stops()
+def _(graph, mo, present):
+    #_stops = graph.get_stops()
     #_stops = graph.get_stop_cluster(stop_name='Possingergasse')
-    #_stops = graph.get_stops_for_subdistrict(16, 10)
+    _stops = graph.get_stops_for_subdistrict(16, 10)
 
-    # Create a folium map centered on the mean of the coordinates
-    map = folium.Map(
-        tiles=None,
-        #tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
-        #attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        location=[48.2202331, 16.3796424],
-        zoom_start=11
-    )
+    # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
+    # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    transport_map = present.TransportMap(lat=48.2202331, lon=16.3796424, zoom=11)
+    transport_map.add_stops(_stops)
 
-    # Add map as base layer
-    folium.TileLayer("https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png",
-                    attr='&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                    name="Stadiamaps", overlay=False).add_to(map)
-
-    # Add layers to show/hide markers
-    stop_marks = folium.FeatureGroup(name="Stop markers", control=True, show=True).add_to(map)
-    cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=False).add_to(map)
-    folium.LayerControl().add_to(map)
-
-    # Create panes to put differnt markers on different z-indexes
-    folium.map.CustomPane("stops", z_index=600).add_to(map)
-    folium.map.CustomPane("clusters", z_index=450).add_to(map)
-
-    # Add markers for each stop
-    for stop in _stops:
-        folium.CircleMarker(
-            location=[stop.lat, stop.lon],
-            radius=2,
-            color="red",
-            fill=True,
-            fill_opacity=0.4,
-            opacity=0.6,
-            popup=stop.name,
-            tooltip=stop.id,
-            pane="stops"
-        ).add_to(stop_marks)
-
-        if stop.is_cluster:
-            folium.CircleMarker(
-                location=[stop.cluster_lat, stop.cluster_lon],
-                radius=15,
-                color="violet",
-                fill=True,
-                fill_opacity=0.2,
-                opacity=0.1,
-                pane="clusters"
-            ).add_to(cluster_marks)
-
-    # Save the map to an HTML file
-    #map.save("stops_map.html")
-
-    mo.iframe(map._repr_html_(), height=650)
+    mo.iframe(transport_map.as_html(), height=650)
     return
 
 

@@ -3,6 +3,16 @@ from neo4j import GraphDatabase, ResultSummary, Record
 URI = "bolt://localhost:7687"
 AUTH = ("neo4j", "")
 
+STOP_RETURN_STATEMENT: str = """RETURN DISTINCT
+    s.id as id,
+    s.lat as lat,
+    s.lon as lon,
+    s.name as name,
+    apoc.label.exists(s, "ClusterStop") as is_cluster,
+    s.cluster_lat as cluster_lat,
+    s.cluster_lon as cluster_lon;
+    """
+
 # Create a driver instance
 driver = GraphDatabase.driver(URI, auth=AUTH)
 
@@ -13,12 +23,10 @@ class Stop:
         self.lat: float = latitude
         self.lon: float = longitude
         self.name: str = name
-        self.is_cluster = False
 
 class ClusterStop(Stop):
    def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, cluster_lat: float, cluster_lon: float):
        super().__init__(stop_id, latitude, longitude, name)
-       self.is_cluster = True
        self.cluster_lat: float = cluster_lat
        self.cluster_lon: float = cluster_lon
 
@@ -28,16 +36,6 @@ class SubDistrict:
         self.population: int = population
         self.area: float = area
         self.shape: str = shape
-
-STOP_RETURN_STATEMENT: str = """RETURN DISTINCT
-    s.id as id,
-    s.lat as lat,
-    s.lon as lon,
-    s.name as name,
-    apoc.label.exists(s, "ClusterStop") as is_cluster,
-    s.cluster_lat as cluster_lat,
-    s.cluster_lon as cluster_lon;
-    """
 
 
 def import_city_data():
