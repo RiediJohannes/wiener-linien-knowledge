@@ -265,6 +265,30 @@ def execute_query(cypher_query, **params) -> list[Record]:
         print(f"Database query failed with error: {e}")
         return []
 
+def execute_batched_operation(batched_operation, **params) -> ResultSummary | None:
+    """
+    Runs a cypher operation that is meant to update the database without a managed transaction.
+    This is required for operations that are split into multiple batches using the IN TRANSACTIONS
+    OF X ROWS cypher feature.
+    """
+
+    try:
+        with driver.session() as session:
+            result = session.run(batched_operation, **params)
+            return result.consume()
+    except Exception as e:
+        print(f"Database operation failed with error: {e}")
+        return None
+
+def execute_batched_query(batched_query, **params) -> list[Record] | None:
+    try:
+        with driver.session() as session:
+            result = session.run(batched_query, **params)
+            return [record for record in result]
+    except Exception as e:
+        print(f"Database query failed with error: {e}")
+        return None
+
 def execute_operation_returning_count(cypher_query_returning_count, **params) -> int:
     """
     Runs a cypher query that executes some create/update/delete operations on the connected neo4j instance

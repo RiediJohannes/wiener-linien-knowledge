@@ -123,9 +123,9 @@ def detect_station_exits(graph):
 def _(mo):
     mo.md(
         r"""
-    ### Finding representative cluster parents
+    ### Finding representative cluster roots
 
-    So far, we have organized related stops into clusters that are represented by a parent node with the tag `ClusterStop`. However, the choice of this cluster stop was merely arbitrary. Now, we want to determine a rightful representative by choosing the stop with the most traffic among all stops in the cluster.
+    So far, we have organized related stops into clusters that are represented by a root node with the tag `ClusterStop`. However, the choice of this cluster stop was merely arbitrary. Now, we want to determine a rightful representative by choosing the stop with the most traffic among all stops in the cluster.
 
     Therefore, we count the stop times scheduled for each cluster and make the busiest stop the new cluster stop.
     """
@@ -138,9 +138,9 @@ def reassign_cluster_stops(graph):
     _operation = """
     // For each cluster, rank members by usage
     MATCH (stop:Stop)-[:IN_CLUSTER]->(parent:ClusterStop)
-    OPTIONAL MATCH (stop)<-[:AT_STOP]-(st:StopTime)
-    WITH parent, stop, count(st) AS usageCount
-    ORDER BY parent, usageCount DESC, stop.name DESC, stop.id ASC
+    OPTIONAL MATCH (stop)<-[:STOPS_AT]-(t:Trip)
+    WITH parent, stop, count(t) AS tripCount
+    ORDER BY parent, tripCount DESC, stop.name DESC, stop.id ASC
     WITH parent, collect(stop) AS clusterMembers
     WITH parent, clusterMembers, clusterMembers[0] AS mainStop
     WHERE parent.id <> mainStop.id
@@ -166,7 +166,9 @@ def _(mo):
         r"""
     ### Move transport-related relationships to cluster stop
 
-    Now that we have created clusters with the busiest stop in them as their root node (the `ClusterStop`), we move all `:AT_STOP` relationships of the other nodes in the cluster to that `ClusterStop` instead.
+    Now that we have created clusters with the busiest stop in them as their root node (the `ClusterStop`), we move all `:STOPS_AT` relationships of the other nodes in the cluster to that `ClusterStop` instead.
+
+    **WARNING**: Be aware that this is a very expensive operation and might take a while to finish execution.
     """
     )
     return
@@ -175,7 +177,7 @@ def _(mo):
 @app.cell
 def _(graph):
     _expensive_operation = """
-    MATCH (time:StopTime)-[at:AT_STOP]->(s:Stop)-[:IN_CLUSTER]->(c:ClusterStop)
+    MATCH (:Trip)-[at:STOPS_AT]->(s:Stop)-[:IN_CLUSTER]->(c:Stop:ClusterStop)
     WHERE s.id <> c.id
     CALL (at, c) {
       CALL apoc.refactor.to(at, c) YIELD output
@@ -184,8 +186,10 @@ def _(graph):
     RETURN sum(refactoredCount) AS movedRelationships
     """
 
-    _moved_relationships: int = graph.execute_operation_returning_count(_expensive_operation)
-    print(f"Moved a total of {_moved_relationships} :AT_STOP relationships")
+    print("Moving over all :STOPS_AT relationships to cluster roots...")
+    _response = graph.execute_batched_query(_expensive_operation)
+    _moved_relationships: int = int(_response[0][0]) if _response else 0
+    print(f"Moved a total of {_moved_relationships} :STOPS_AT relationships")
     return
 
 
@@ -374,19 +378,19 @@ def _(mo):
 
     **Bus stops:**
     ```cypher
-    MATCH (s:Stop)<-[:AT_STOP]-(:StopTime)-[:DURING_TRIP]->(:BusTrip)
+    MATCH (s:Stop)<-[:STOPS_AT]-(:BusTrip)
     WHERE NOT (s:BusStop)
     SET s: BusStop
     ```
     **Tram stops:**
     ```cypher
-    MATCH (s:Stop)<-[:AT_STOP]-(:StopTime)-[:DURING_TRIP]->(:TramTrip)
+    MATCH (s:Stop)<-[:STOPS_AT]-(:TramTrip)
     WHERE NOT (s:TramStop)
     SET s: TramStop
     ```
     **Subway stops/stations:**
     ```cypher
-    MATCH (s:Stop)<-[:AT_STOP]-(:StopTime)-[:DURING_TRIP]->(:SubwayTrip)
+    MATCH (s:Stop)<-[:STOPS_AT]-(:SubwayTrip)
     WHERE NOT (s:SubwayStation)
     SET s: SubwayStation
     ```
@@ -453,15 +457,15 @@ def _(mo):
     mo.md(
         r"""
     Next, we find every pair of stops $(s1, s2)$ such that some trip $t$ directly connects $s1$ to $s2$ (in that order). We aggregate over all such trips $t$ and sum their operations per year to get the total number of direct connections $s1 \to s2$ in a year.  
-    Note that such trips do not necessarily move between the exact stops $s1$ and $s2$ but between two stops within their (separate) clusters, as we have previously moved all `:AT_STOP` relationships to a cluster's root node.
+    Note that such trips do not necessarily move between the exact stops $s1$ and $s2$ but between two stops within their (separate) clusters, as we have previously moved all `:STOPS_AT` relationships to a cluster's root node.
 
     To determine a fine-grained level of service, we differentiate between modes of transport (bus, tram, subway) when creating these connection relationships, and we also store the exact number of operations per year for that connection in the `yearly` property of that relationship.
 
     ```cypher
     // Consider each pair of stops that appears consecutively in some trip t
-    MATCH (t:Trip:$type_of_trip)<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
-          (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
-    WHERE s1.id <> s2.id AND st2.stop_sequence = st1.stop_sequence + 1
+    MATCH (t:Trip:{type_of_trip})-[at1:STOPS_AT]->(s1:Stop),
+          (t)-[at2:STOPS_AT]->(s2:Stop)
+    WHERE s1.id <> s2.id AND at2.stop_sequence = at1.stop_sequence + 1
     // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
     MATCH (t)-[:OPERATING_ON]->(service:Service)
     WITH s1, s2,
@@ -474,7 +478,7 @@ def _(mo):
 
     A quick word about the `WHERE` clause:
 
-    - `s1.id <> s2.id` -- This guarantees that we ignore trips within a cluster to prevent overcounting, since our bundling of stops may have lead to sequential stops being part of the same cluster (and thus the `:AT_STOP` relationship was redirected to the same root node) .
+    - `s1.id <> s2.id` -- This guarantees that we ignore trips within a cluster to prevent overcounting, since our bundling of stops may have lead to sequential stops being part of the same cluster (and thus the `:STOPS_AT` relationship was redirected to the same root node) .
     - `st2.stop_sequence = st1.stop_sequence + 1` -- This ensures that we only consider _direct_ connections between stops.
     """
     )
@@ -485,9 +489,9 @@ def _(mo):
 def _(graph):
     _operation = """
     // Consider each pair of stops that appears consecutively in some trip t
-    MATCH (t:Trip:{type_of_trip})<-[:DURING_TRIP]-(st1:StopTime)-[:AT_STOP]->(s1:Stop),
-          (t)<-[:DURING_TRIP]-(st2:StopTime)-[:AT_STOP]->(s2:Stop)
-    WHERE s1.id <> s2.id AND st2.stop_sequence = st1.stop_sequence + 1
+    MATCH (t:Trip:{type_of_trip})-[at1:STOPS_AT]->(s1:Stop),
+          (t)-[at2:STOPS_AT]->(s2:Stop)
+    WHERE s1.id <> s2.id AND at2.stop_sequence = at1.stop_sequence + 1
     // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
     MATCH (t)-[:OPERATING_ON]->(service:Service)
     WITH s1, s2,
@@ -510,9 +514,9 @@ def _(graph):
 
 @app.cell
 def _(graph, mo, present):
-    #_stops = graph.get_stops()
+    _stops = graph.get_stops()
     #_stops = graph.get_stop_cluster(stop_name='Possingergasse')
-    _stops = graph.get_stops_for_subdistrict(16, 10)
+    #_stops = graph.get_stops_for_subdistrict(16, 10)
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
     # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -520,6 +524,19 @@ def _(graph, mo, present):
     transport_map.add_stops(_stops)
 
     mo.iframe(transport_map.as_html(), height=650)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        """
+    <div style="display: flex; justify-content: space-between; width: 100%;">
+        <a href="./notebooks/test.py" style="text-decoration: none;">← Previous page</a>
+        <a href="./../src/main.py" style="text-decoration: none;">Next page →</a>
+    </div>
+    """
+    )
     return
 
 

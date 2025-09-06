@@ -26,7 +26,7 @@ async fn main() {
     // Ask the database to return '1' if there is ANY node and check if we received something
     let mut result = graph.execute(query(r#"
         MATCH (n)
-        WHERE n:Agency OR n:Route OR n:Trip OR n:Service OR n:ServiceException OR n:Stop OR n:StopTime
+        WHERE n:Agency OR n:Route OR n:Trip OR n:Service OR n:ServiceException OR n:Stop
         RETURN 1 LIMIT 1
     "#)).await.unwrap();
     if let Ok(Some(_)) = result.next().await {
@@ -52,18 +52,16 @@ async fn main() {
     ];
     for (node, prop) in uniqueness_constraints {
         graph.run(neo4rs::query(&format!(
-            "CREATE CONSTRAINT IF NOT EXISTS FOR {} REQUIRE {} IS NODE KEY", node, prop)))
+            "CREATE CONSTRAINT IF NOT EXISTS FOR {} REQUIRE {} IS UNIQUE", node, prop)))
             .await
             .unwrap_or_else(|e| panic!("Failed to create uniqueness constraint.\nError: {}", e));
     }
 
     let index_queries = [
         ("(ex:ServiceException)", "(ex.service_id)"),
-        ("(s:Stop)", "(s.lon);"),
-        ("(s:Stop)", "(s.lat);"),
-        ("(st:StopTime)", "(st.trip_id)"),
-        ("(st:StopTime)", "(st.stop_id)"),
-        ("(st:StopTime)", "(st.stop_sequence)"),
+        ("(s:Stop)", "(s.lon)"),
+        ("(s:Stop)", "(s.lat)"),
+        ("()-[at:STOPS_AT]-())", "(at.stop_sequence)"),
     ];
     for (node, prop) in index_queries {
         graph.run(neo4rs::query(&format!(
@@ -164,18 +162,16 @@ async fn main() {
             "Importing stop times",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/stop_times.txt' AS row
-        CALL {
-            WITH row // bring row variable into CALL-scope
+        CALL (row) {
             MATCH (t:Trip {id: row.trip_id})
             MATCH (s:Stop {id: row.stop_id})
-            MERGE (st:StopTime {trip_id: row.trip_id, stop_id: row.stop_id, stop_sequence: toInteger(row.stop_sequence)})
-              SET st.arrival_time = localtime(row.arrival_time),
-                  st.departure_time = localtime(row.departure_time),
-                  st.pickup_type = toInteger(row.pickup_type),
-                  st.drop_off_type = toInteger(row.drop_off_type),
-                  st.distance = row.shape_dist_traveled
-            MERGE (st)-[:DURING_TRIP]->(t)
-            MERGE (st)-[:AT_STOP]->(s)
+            // Use CREATE instead of MERGE since MERGE for relationships is very inefficient
+            CREATE (t)-[at:STOPS_AT {stop_sequence: toInteger(row.stop_sequence)}]->(s)
+            SET at.arrival_time = localtime(row.arrival_time),
+                at.departure_time = localtime(row.departure_time),
+                at.pickup_type = toInteger(row.pickup_type),
+                at.drop_off_type = toInteger(row.drop_off_type),
+                at.distance = row.shape_dist_traveled
         } IN TRANSACTIONS OF 10000 ROWS
         "#,
         ),

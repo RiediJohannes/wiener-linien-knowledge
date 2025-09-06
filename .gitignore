@@ -5,6 +5,8 @@
 **/target/
 **/__marimo__
 #initializer
+src/notebooks/**
+src/notebooks/
 
 ############################### GENERATED ignore template ##############################
 
