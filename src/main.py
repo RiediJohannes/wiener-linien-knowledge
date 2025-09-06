@@ -324,6 +324,7 @@ def _(graph):
         c.cluster_lon = cluster_lon
     """
 
+    print("Calculating the average position")
     _summary = graph.execute_operation(_operation)
     print(f"Set {_summary.counters.properties_set} properties")
     return
@@ -516,7 +517,7 @@ def _(graph):
 def _(graph, mo, present):
     _stops = graph.get_stops()
     #_stops = graph.get_stop_cluster(stop_name='Possingergasse')
-    #_stops = graph.get_stops_for_subdistrict(16, 10)
+    #_stops = graph.get_stops_for_subdistrict(10, 1)
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
     # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',

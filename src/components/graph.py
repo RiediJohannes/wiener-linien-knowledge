@@ -3,16 +3,6 @@ from neo4j import GraphDatabase, ResultSummary, Record
 URI = "bolt://localhost:7687"
 AUTH = ("neo4j", "")
 
-STOP_RETURN_STATEMENT: str = """RETURN DISTINCT
-    s.id as id,
-    s.lat as lat,
-    s.lon as lon,
-    s.name as name,
-    apoc.label.exists(s, "ClusterStop") as is_cluster,
-    s.cluster_lat as cluster_lat,
-    s.cluster_lon as cluster_lon;
-    """
-
 # Create a driver instance
 driver = GraphDatabase.driver(URI, auth=AUTH)
 
@@ -25,10 +15,14 @@ class Stop:
         self.name: str = name
 
 class ClusterStop(Stop):
-   def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, cluster_lat: float, cluster_lon: float):
+   def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, cluster_lat: float, cluster_lon: float, cluster_points: list[list[float]]):
        super().__init__(stop_id, latitude, longitude, name)
        self.cluster_lat: float = cluster_lat
        self.cluster_lon: float = cluster_lon
+       if cluster_points:
+           self.cluster_points: list[tuple[float, float]] = [(point[0], point[1]) for point in cluster_points]
+       else:
+           self.cluster_points = []
 
 class SubDistrict:
     def __init__(self, district_num: int, subdistrict_num: int, population: int, area: float, shape: str):
@@ -107,12 +101,12 @@ def get_subdistricts() -> list[SubDistrict]:
     ) for record in results]
 
 def get_stops() -> list[Stop] | None:
-    stops_query = f"""
+    base_query = f"""
     MATCH (s:Stop)
-    {STOP_RETURN_STATEMENT}
     """
 
-    response = execute_query(stops_query)
+    query = _finalize_stop_query(base_query, "s")
+    response = execute_query(query)
     return _parse_stops_from_response(response)
 
 def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
@@ -121,29 +115,29 @@ def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
 
     where_clause: str = f"start.id = '{stop_id}'" if stop_id is not None else f"start.name = '{stop_name}'"
 
-    query = f"""
+    base_query = f"""
     MATCH (start:Stop)
     WHERE {where_clause}
     OPTIONAL MATCH (start)-[:IN_CLUSTER]->(c:Stop)<-[:IN_CLUSTER]-(d:Stop)
     
     WITH start, c, collect(d) AS others
-    UNWIND [start, c] + others AS s
-    WITH s
-    WHERE s IS NOT NULL
-    {STOP_RETURN_STATEMENT}
+    UNWIND [start, c] + others AS node
+    WITH node
+    WHERE node IS NOT NULL
     """
 
+    query = _finalize_stop_query(base_query, "node")
     response = execute_query(query)
     return _parse_stops_from_response(response)
 
 def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_stops_within = False) -> list[Stop] | None:
-    query = f"""
+    base_query = f"""
     MATCH (d:SubDistrict)
     WHERE d.district_num = $dist_num AND d.sub_district_num = $subdist_num
     MATCH (s:Stop)-[:{"LOCATED_IN" if only_stops_within else "LOCATED_NEARBY"}]->(d)
-    {STOP_RETURN_STATEMENT}
     """
 
+    query = _finalize_stop_query(base_query, "s")
     response = execute_query(query, dist_num=district_code, subdist_num=subdistrict_code)
     return _parse_stops_from_response(response)
 
@@ -297,13 +291,31 @@ def execute_operation_returning_count(cypher_query_returning_count, **params) ->
     result = execute_query(cypher_query_returning_count, **params)
     return int(result[0][0]) if result else 0
 
+
 def _parse_stops_from_response(response: list[Record]) -> list[Stop]:
     stops: list[Stop] = []
     for record in response:
         if record["is_cluster"]:
             stops.append(ClusterStop(record["id"], record["lat"], record["lon"], record["name"],
-                                     record["cluster_lat"], record["cluster_lon"]))
+                                     record["cluster_lat"], record["cluster_lon"], record["cluster_points"]))
         else:
             stops.append(Stop(record["id"], record["lat"], record["lon"], record["name"]))
 
     return stops
+
+def _finalize_stop_query(base_query: str, stop_variable: str) -> str:
+    return f"""
+    {base_query}
+    WITH {stop_variable}
+    OPTIONAL MATCH ({stop_variable})<-[:IN_CLUSTER]-(child:Stop)
+    WITH {stop_variable}, collect([child.lat, child.lon]) as cluster_points
+    RETURN DISTINCT
+        {stop_variable}.id as id,
+        {stop_variable}.lat as lat,
+        {stop_variable}.lon as lon,
+        {stop_variable}.name as name,
+        apoc.label.exists({stop_variable}, "ClusterStop") as is_cluster,
+        {stop_variable}.cluster_lat as cluster_lat,
+        {stop_variable}.cluster_lon as cluster_lon,
+        cluster_points;
+    """

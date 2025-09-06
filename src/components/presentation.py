@@ -1,4 +1,6 @@
 import folium
+from shapely import MultiPoint
+
 from src.components.graph import Stop, ClusterStop
 
 
@@ -27,10 +29,12 @@ class TransportMap:
         self.stop_marks = folium.FeatureGroup(name="Stop markers", control=True, show=True).add_to(self.base)
         self.cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=False).add_to(self.base)
         folium.LayerControl().add_to(self.base)
+        # Keep stop markers in front so they remain clickable
+        self.base.keep_in_front(self.stop_marks)
 
         # Create panes to put different markers on different z-indexes
-        folium.map.CustomPane("stops", z_index=600).add_to(self.base)
-        folium.map.CustomPane("clusters", z_index=450).add_to(self.base)
+        folium.map.CustomPane("clusters", z_index=600).add_to(self.base)
+        folium.map.CustomPane("stops", z_index=800).add_to(self.base)
 
 
     def add_stops(self, stops: list[Stop]) -> None:
@@ -51,14 +55,22 @@ class TransportMap:
 
             # Additionally, add a big translucent circle for a cluster
             if isinstance(stop, ClusterStop):
-                folium.CircleMarker(
-                    location=[stop.cluster_lat, stop.cluster_lon],
-                    radius=15,
+                # Compute convex hull
+                cluster_hull = MultiPoint(stop.cluster_points).convex_hull
+                # Grow the polygon by a very small buffer zone
+                # This is especially important for two-point clusters (thick line)
+                buffered_hull = cluster_hull.buffer(0.00004, cap_style="round", join_style="round")
+                hull_points = [(lat, lon) for lat, lon in buffered_hull.exterior.coords]
+
+                folium.Polygon(
+                    locations=hull_points,
                     color="violet",
+                    weight=1,
                     fill=True,
-                    fill_opacity=0.2,
-                    opacity=0.1,
-                    pane="clusters"
+                    fill_opacity=0.35,
+                    opacity=0.5,
+                    pane="clusters",
+                    interactive=False
                 ).add_to(self.cluster_marks)
 
     def as_html(self) -> str:
