@@ -334,7 +334,51 @@ def _(graph):
 def _(mo):
     mo.md(
         r"""
-    Pre-calculate population density of all subdistricts:
+    ## Organizing City Districts
+
+    ### Determine neighbouring subdistricts
+
+    To better describe the geographic relationship between subdistricts, we determine which subdistricts border each other and store this in our knowledge graph.
+    """
+    )
+    return
+
+
+@app.cell
+def _(geo, graph):
+    _subdistricts = graph.get_subdistricts()
+
+    print("Finding neighbours of each subdistrict...")
+    # For each district, collect a list of neighbouring districts (with a tolerance of 20 metres)
+    _neighbours = geo.find_neighbouring_subdistricts(_subdistricts, buffer_metres=20)
+
+    _operation = """
+    WITH $neighbours_dict as source_dict
+    UNWIND keys(source_dict) AS district_id 
+      WITH source_dict, district_id, 
+         toInteger(split(district_id, '-')[0]) AS left_dist, 
+         toInteger(split(district_id, '-')[1]) AS left_sub
+      MATCH (left:SubDistrict {district_num: left_dist, sub_district_num: left_sub})
+
+      UNWIND source_dict[district_id] AS neighbour_id
+        WITH left, 
+           toInteger(split(neighbour_id, '-')[0]) AS right_dist, 
+           toInteger(split(neighbour_id, '-')[1]) AS right_sub
+        MATCH (right:SubDistrict {district_num: right_dist, sub_district_num: right_sub})
+        MERGE (left)-[:NEIGHBOURS]->(right)
+    """
+
+    print("Creating ':NEIGHBOURS' relationships...")
+    _summary = graph.execute_operation(_operation, neighbours_dict=_neighbours)
+    print(f"Created {_summary.counters.relationships_created} relationships")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ### Pre-calculate population density of all subdistricts
 
     Since a subdistrict's area is given in m², we multiply the population count by one million to get the population density in people/km².
 
@@ -342,7 +386,15 @@ def _(mo):
     MATCH (d:SubDistrict)
     SET d.density = 1_000_000 * d.population / d.area;
     ```
+    """
+    )
+    return
 
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
     ### Adding Labels
 
     Classify exceptions to the regularly scheduled service into additional and removed service
@@ -377,6 +429,8 @@ def _(mo):
 
     ### Classify stops
 
+    Adding these labels is mostly done for easier retrieval of certain stops later.
+
     **Bus stops:**
     ```cypher
     MATCH (s:Stop)<-[:STOPS_AT]-(:BusTrip)
@@ -394,6 +448,12 @@ def _(mo):
     MATCH (s:Stop)<-[:STOPS_AT]-(:SubwayTrip)
     WHERE NOT (s:SubwayStation)
     SET s: SubwayStation
+    ```
+    **Collect all stops that are used by some trip (after redirecting trips to cluster roots)**
+    ```cypher
+    MATCH (s:Stop&(BusStop|TramStop|SubwayStation))
+    WHERE NOT (s: InUse)
+    SET s: InUse
     ```
     """
     )
@@ -528,36 +588,47 @@ def _(mo):
     ### Existing Transit Network
 
     ```cypher
-    // Existing transit connections
+    // Existing transit connections with mode of transport
     MATCH (s1:Stop)-[conn:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]->(s2:Stop)
-    RETURN s1.id, type(conn), s2.id
+    WHERE conn.yearly > 4 * 365
+    RETURN s1.id as head, type(conn) as rel, s2.id as tail
     ```
 
-    We exclude connections that happen less than twice a day (<730 times a year) on average, since these mostly represent temporary reroutings due to construction work or special trips for operational reasons (e.g. ending a trip at a depot at the end of a day).
+    We exclude connections that happen fewer than four times a day (<1460 times a year) on average, since these mostly represent temporary reroutings due to construction work or special trips for operational reasons (e.g. ending a trip at a depot at the end of a day). Remember, this does not mean that e.g. a single bus line connects the two stops four times a day, but _ALL_ direct bus connections exceed four operations a day _on average_.
 
     ```cypher
     // Routes serving stops
-    MATCH (r:Route)-[:SERVES]->(s:Stop)
-    RETURN r.id, 'SERVES', s.id
+    MATCH (t:Trip)-[:OPERATING_ON]->(ser:Service)
+    WITH t, sum(ser.operations_per_year) as operations
+    MATCH (r:Route)<-[:PART_OF_ROUTE]-(t)-[:STOPS_AT]->(s:Stop)
+    WITH r.short_name as route_name, s, sum(operations) as trip_count
+    WHERE trip_count >= 365
+    RETURN route_name as head, 'SERVES' as rel, s.id as tail
 
-    // Trip patterns  
-    MATCH (t:Trip)-[:STOPS_AT]->(s:Stop)
-    RETURN t.id, 'STOPS_AT', s.id
+    // Mode of transport of each route
+    MATCH (r:Route)
+    RETURN DISTINCT r.short_name as head, 'IS_MODE_OF_TRANSPORT' as rel,
+    CASE r.type
+      WHEN 0 THEN 'TRAM'
+      WHEN 1 THEN 'SUBWAY'
+      WHEN 2 THEN 'TRAIN'
+      WHEN 3 THEN 'BUS'
+      ELSE 'SPECIAL'
+    END AS tail
     ```
+
+    Similarly as for the connection relations before, we discard some noise. In this case, we only consider a route to serve a particular stop if it stops there at least once per day on average.
 
     ### Geographic Location
 
     ```cypher
-    // Stop locations in subdistricts
-    MATCH (s:Stop)-[:LOCATED_NEARBY]->(d:SubDistrict)
-    RETURN s.id, 'LOCATED_IN', d.id
+    // Stop locations in/nearby subdistricts
+    MATCH (s:Stop:InUse)-[loc:LOCATED_NEARBY|LOCATED_IN]->(d:SubDistrict)
+    WITH s, loc, d.district_num + '-' + d.sub_district_num as subdistrict
+    RETURN s.id as head, type(loc) as rel, subdistrict as tail
 
     // Geographic proximity (without direct connection)
-    MATCH (s1:Stop)-[:LOCATED_NEARBY]->(d1:SubDistrict)
-    MATCH (s2:Stop)-[:LOCATED_NEARBY]->(d2:SubDistrict)
-    WHERE d1 <> d2 AND distance(s1, s2) < 1000 // 1km radius
-    AND NOT EXISTS((s1)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2))
-    RETURN s1.id, 'GEOGRAPHICALLY_CLOSE', s2.id
+    ...
     ```
 
     ### Population Density
@@ -682,7 +753,7 @@ def _():
 
 @app.cell
 def _(graph, mo, present):
-    _stops = graph.get_stops()
+    _stops = graph.get_stops(id_list=["at:49:1115:0:2", "at:49:124:0:2"])
     #_stops = graph.get_stop_cluster(stop_name='Possingergasse')
     #_stops = graph.get_stops_for_subdistrict(10, 1)
 

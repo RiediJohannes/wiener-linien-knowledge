@@ -27,7 +27,7 @@ class TransportMap:
 
         # Add layers to show/hide markers
         self.stop_marks = folium.FeatureGroup(name="Stop markers", control=True, show=True).add_to(self.base)
-        self.cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=False).add_to(self.base)
+        self.cluster_marks = folium.FeatureGroup(name="Cluster markers", control=True, show=True).add_to(self.base)
         folium.LayerControl().add_to(self.base)
         # Keep stop markers in front so they remain clickable
         self.base.keep_in_front(self.stop_marks)

@@ -100,9 +100,12 @@ def get_subdistricts() -> list[SubDistrict]:
         record["shape"]
     ) for record in results]
 
-def get_stops() -> list[Stop] | None:
+def get_stops(*, id_list: list[str] = None) -> list[Stop] | None:
+    where_clause = f"WHERE s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else ""
+
     base_query = f"""
     MATCH (s:Stop)
+    {where_clause}
     """
 
     query = _finalize_stop_query(base_query, "s")

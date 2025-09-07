@@ -1,10 +1,43 @@
 import geopandas as gpd
 import numpy as np
-from shapely.wkt import loads
+from pyproj import Transformer
+from shapely.ops import transform
 from shapely.geometry import MultiPoint, Point
+from shapely.geometry.base import BaseGeometry
+from shapely.wkt import loads
 from sklearn.cluster import DBSCAN
 
 from src.components.graph import SubDistrict, Stop
+
+
+def find_neighbouring_subdistricts(subdistricts: list[SubDistrict], buffer_metres: int = 20, crs="EPSG:4326") -> dict[str, list[str]]:
+    if buffer_metres < 0:
+        raise ValueError("The buffer distance must be positive!")
+
+    district_polygons: dict[str, BaseGeometry] = {dist.id: loads(dist.shape) for dist in subdistricts}
+
+    # Project all polygons to a CRS with distances in metres
+    target_crs = "EPSG:3857"  # Web Mercator, units in meters
+    transformer = Transformer.from_crs(crs, target_crs, always_xy=True)
+    projected_polygons = {
+        dist_id: transform(transformer.transform, poly)
+        for dist_id, poly in district_polygons.items()
+    }
+
+    # Buffer all polygons by the given number of metres
+    buffered_polygons = {
+        dist_id: poly.buffer(buffer_metres)
+        for dist_id, poly in projected_polygons.items()
+    }
+
+    # Find intersections
+    neighbours = {dist_id: [] for dist_id in district_polygons.keys()}
+    for id_left, buffered_poly in buffered_polygons.items():
+        for id_right, original_poly in projected_polygons.items():
+            if id_left != id_right and buffered_poly.intersects(original_poly):
+                neighbours[id_left].append(id_right)
+
+    return neighbours
 
 
 def match_stops_to_subdistricts(stops: list[Stop], subdistricts: list[SubDistrict], buffer_metres: int = 0, crs="EPSG:4326"):
