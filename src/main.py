@@ -464,7 +464,67 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
-    ### Determine connections between stops
+    ## Finding relations between stops
+
+    ### Geographic proximity of stops
+
+    First, we collect all pairs of stops that are within 800 meters of each other and connect them by a symmetric `:IS_CLOSE_TO` relationship. For points that are the root of a cluster, we take the geographic midpoint of that cluster which we calculated earlier.
+
+    ```cypher
+    MATCH (s:Stop:InUse), (t:Stop:InUse)
+    WHERE s.id < t.id
+    WITH s, t,
+         point({
+           latitude: CASE WHEN s:ClusterStop THEN s.cluster_lat ELSE s.lat END,
+           longitude: CASE WHEN s:ClusterStop THEN s.cluster_lon ELSE s.lon END
+         }) AS s_location,
+         point({
+           latitude: CASE WHEN t:ClusterStop THEN t.cluster_lat ELSE t.lat END,
+           longitude: CASE WHEN t:ClusterStop THEN t.cluster_lon ELSE t.lon END
+         }) AS t_location
+    WITH s, t, s_location, t_location,
+       point.distance(s_location, t_location) AS distance_meters
+    WHERE distance_meters < 800
+    MERGE (s)-[:IS_CLOSE_TO {distance: distance_meters}]->(t)
+    MERGE (t)-[:IS_CLOSE_TO {distance: distance_meters}]->(s)
+    ```
+    """
+    )
+    return
+
+
+@app.cell
+def _(graph):
+    _operation = """
+    MATCH (s:Stop:InUse), (t:Stop:InUse)
+    WHERE s.id < t.id
+    WITH s, t,
+         point({
+           latitude: CASE WHEN s:ClusterStop THEN s.cluster_lat ELSE s.lat END,
+           longitude: CASE WHEN s:ClusterStop THEN s.cluster_lon ELSE s.lon END
+         }) AS s_location,
+         point({
+           latitude: CASE WHEN t:ClusterStop THEN t.cluster_lat ELSE t.lat END,
+           longitude: CASE WHEN t:ClusterStop THEN t.cluster_lon ELSE t.lon END
+         }) AS t_location
+    WITH s, t, s_location, t_location,
+       point.distance(s_location, t_location) AS distance_meters
+    WHERE distance_meters < 800
+    MERGE (s)-[:IS_CLOSE_TO {distance: distance_meters}]->(t)
+    MERGE (t)-[:IS_CLOSE_TO {distance: distance_meters}]->(s)
+    """
+
+    print("Finding pairs of geographically close stops...")
+    _summary = graph.execute_operation(_operation)
+    print(f"Added {int(_summary.counters.relationships_created / 2)} symmetric :IS_CLOSE_TO relationships")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ### Transit connections between stops
 
     Our next main goal is to detect the **frequency of a direct public transport connections** from one stop to another. In the end, we would like every stop `s` in our graph to contain relationships of the form `(s)-[:X_CONNECTS_TO]->(t)` for every stop `t` it has a _direct_ connection to at least once per year, where `X` is replaced by the mode of transport ($X \in \{\texttt{BUS}, \texttt{TRAM}, \texttt{SUBWAY}\}$).
 
@@ -627,25 +687,35 @@ def _(mo):
     WITH s, loc, d.district_num + '-' + d.sub_district_num as subdistrict
     RETURN s.id as head, type(loc) as rel, subdistrict as tail
 
-    // Geographic proximity (without direct connection)
-    ...
+    // Neighbouring subdistricts
+    MATCH (d1:SubDistrict)-[:NEIGHBOURS]->(d2:SubDistrict)
+    WITH d1, d2,
+        d1.district_num + '-' + d1.sub_district_num as left_neighbour,
+        d2.district_num + '-' + d2.sub_district_num as right_neighbour
+    RETURN left_neighbour as head, "NEIGHBOURS" as rel, right_neighbour as tail
+
+    // Geographic proximity of stops
+    MATCH (s:Stop:InUse)-[c:IS_CLOSE_TO]->(t:Stop:InUse)
+    RETURN s.id as head, type(c) as rel, t.id as tail
     ```
 
     ### Population Density
 
-    ```
+    ```cypher
+    // Classify districts according to their density
     MATCH (d:SubDistrict)
-    WITH d, 
+    WITH d, d.district_num + "-" + d.sub_district_num as district,
       CASE 
-        WHEN d.population_density > 8000 THEN 'VERY_HIGH_DENSITY'
-        WHEN d.population_density > 5000 THEN 'HIGH_DENSITY'  
-        WHEN d.population_density > 2000 THEN 'MEDIUM_DENSITY'
-        ELSE 'LOW_DENSITY'
+        WHEN d.density > 20_000 THEN 'VERY_HIGH_DENSITY'
+        WHEN d.density > 10_000 THEN 'HIGH_DENSITY'  
+        WHEN d.density > 5000 THEN 'MEDIUM_DENSITY'
+        WHEN d.density > 1500 THEN 'LOW_DENSITY'
+        ELSE 'VERY_LOW_DENSITY'
       END as density_category
-    RETURN d.id, 'HAS_DENSITY', density_category
+    RETURN district as head, 'HAS_DENSITY' as rel, density_category as tail
 
     // Stops in high-demand areas
-    MATCH (s:Stop)-[:LOCATED_NEARBY]->(d:SubDistrict)
+    MATCH (s:Stop:InUse)-[:LOCATED_NEARBY]->(d:SubDistrict)
     WHERE d.population_density > 5000
     RETURN s.id, 'IN_HIGH_DEMAND_AREA', 'HIGH_DEMAND'
     ```
@@ -753,8 +823,8 @@ def _():
 
 @app.cell
 def _(graph, mo, present):
-    _stops = graph.get_stops(id_list=["at:49:1115:0:2", "at:49:124:0:2"])
-    #_stops = graph.get_stop_cluster(stop_name='Possingergasse')
+    _stops = graph.get_stops(id_list=["at:49:1418:0:4", "at:49:466:0:1"])
+    #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
     #_stops = graph.get_stops_for_subdistrict(10, 1)
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
