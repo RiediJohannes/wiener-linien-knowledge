@@ -513,6 +513,173 @@ def _(graph):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    # Knowledge Graph Embeddings
+
+    Now, we are ready for this project's main goal, which is predicting missing connections in Vienna's public transport network. As the wording suggests, this becomes a classic **link prediction problem** in our knowledge graph. A key tool to tackle such problems are knowledge graph embeddings. In this chapter, we will use the popular KG embedding library **PyKEEN**.
+
+    ## Training Triples Generation
+
+    Since link prediction works on the basis of **triples** of the form $(h,r,t)$ ($h:$ head, $r:$ relation, $t:$ tail), we need to derive and extract meaningful triples from our knowledge graph. This training data should include all reasonable information about the domain that is considered relevant for planning new transport connections between existing stops.
+
+    ### Existing Transit Network
+
+    ```cypher
+    // Existing transit connections
+    MATCH (s1:Stop)-[conn:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]->(s2:Stop)
+    RETURN s1.id, type(conn), s2.id
+    ```
+
+    We exclude connections that happen less than twice a day (<730 times a year) on average, since these mostly represent temporary reroutings due to construction work or special trips for operational reasons (e.g. ending a trip at a depot at the end of a day).
+
+    ```cypher
+    // Routes serving stops
+    MATCH (r:Route)-[:SERVES]->(s:Stop)
+    RETURN r.id, 'SERVES', s.id
+
+    // Trip patterns  
+    MATCH (t:Trip)-[:STOPS_AT]->(s:Stop)
+    RETURN t.id, 'STOPS_AT', s.id
+    ```
+
+    ### Geographic Location
+
+    ```cypher
+    // Stop locations in subdistricts
+    MATCH (s:Stop)-[:LOCATED_NEARBY]->(d:SubDistrict)
+    RETURN s.id, 'LOCATED_IN', d.id
+
+    // Geographic proximity (without direct connection)
+    MATCH (s1:Stop)-[:LOCATED_NEARBY]->(d1:SubDistrict)
+    MATCH (s2:Stop)-[:LOCATED_NEARBY]->(d2:SubDistrict)
+    WHERE d1 <> d2 AND distance(s1, s2) < 1000 // 1km radius
+    AND NOT EXISTS((s1)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2))
+    RETURN s1.id, 'GEOGRAPHICALLY_CLOSE', s2.id
+    ```
+
+    ### Population Density
+
+    ```
+    MATCH (d:SubDistrict)
+    WITH d, 
+      CASE 
+        WHEN d.population_density > 8000 THEN 'VERY_HIGH_DENSITY'
+        WHEN d.population_density > 5000 THEN 'HIGH_DENSITY'  
+        WHEN d.population_density > 2000 THEN 'MEDIUM_DENSITY'
+        ELSE 'LOW_DENSITY'
+      END as density_category
+    RETURN d.id, 'HAS_DENSITY', density_category
+
+    // Stops in high-demand areas
+    MATCH (s:Stop)-[:LOCATED_NEARBY]->(d:SubDistrict)
+    WHERE d.population_density > 5000
+    RETURN s.id, 'IN_HIGH_DEMAND_AREA', 'HIGH_DEMAND'
+    ```
+
+    ### Level of Service
+
+    ```cypher
+    // High-frequency connections
+    MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]->(s2:Stop)
+    WHERE conn.yearly > 10000  // Adjust threshold
+    RETURN s1.id, 'HIGH_FREQUENCY_TO', s2.id
+
+    // Transfer hubs (stops with many connections)
+    MATCH (s:Stop)
+    WITH s, size((s)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-()) as connection_count
+    WHERE connection_count > 5
+    RETURN s.id, 'IS_HUB', 'TRANSFER_HUB'
+    ```
+
+    stop_in_high_density_area + SHOULD_CONNECT_TO ≈ stop_in_high_density_area
+    stop_A + GEOGRAPHICALLY_CLOSE ≈ stop_B → Maybe they should be connected
+    district + HIGH_DENSITY ≈ DENSE_AREA → Stops in dense areas need good connections
+    stop + IS_WELL_CONNECTED ≈ HUB → Hubs should connect to underserved areas
+    """
+    )
+    return
+
+
+@app.cell
+def _(graph):
+    def generate_training_triples():
+        queries = [
+            # 1. Core transit network
+            """
+            MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]->(s2:Stop)
+            RETURN s1.id as head, type(conn) as relation, s2.id as tail
+            """,
+        
+            # 2. Geographic context
+            """
+            MATCH (s:Stop)-[:LOCATED_NEARBY]->(d:SubDistrict)
+            RETURN s.id as head, 'LOCATED_IN' as relation, d.id as tail
+            """,
+        
+            # 3. Demand indicators
+            """
+            MATCH (d:SubDistrict)
+            WITH d, CASE 
+                WHEN d.population_density > 8000 THEN 'VERY_HIGH_DENSITY'
+                WHEN d.population_density > 5000 THEN 'HIGH_DENSITY'
+                WHEN d.population_density > 2000 THEN 'MEDIUM_DENSITY'
+                ELSE 'LOW_DENSITY' END as category
+            RETURN d.id as head, 'HAS_DENSITY' as relation, category as tail
+            """,
+        
+            # 4. Service patterns
+            """
+            MATCH (s:Stop)
+            WITH s, size((s)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-()) as conn_count
+            WHERE conn_count > 3
+            RETURN s.id as head, 'IS_WELL_CONNECTED' as relation, 'HUB' as tail
+            """,
+        
+            # 5. Geographic proximity without connection (important!)
+            """
+            MATCH (s1:Stop)-[:LOCATED_NEARBY]->(d1:SubDistrict)
+            MATCH (s2:Stop)-[:LOCATED_NEARBY]->(d2:SubDistrict) 
+            WHERE d1 <> d2 AND distance(s1, s2) < 800
+            AND NOT EXISTS((s1)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2))
+            RETURN s1.id as head, 'NEARBY_UNCONNECTED' as relation, s2.id as tail
+            """,
+        ]
+    
+        all_triples = []
+        for query in queries:
+            response = graph.execute_query(query)
+            triples = [(rec['head'], rec['relation'], rec['tail']) for rec in response]
+            all_triples.extend(triples)
+            print(f"Added {len(triples)} triples from query")
+    
+        return all_triples
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    ## Model Training
+
+    Next comes the setup for model training. We will train two models using different KG embedding algorithms and comparatively analyze their results.
+
+    ### Model 1: RotatE
+
+
+    """
+    )
+    return
+
+
+@app.cell
+def _():
+    return
+
+
 @app.cell
 def _(graph, mo, present):
     _stops = graph.get_stops()
@@ -525,19 +692,6 @@ def _(graph, mo, present):
     transport_map.add_stops(_stops)
 
     mo.iframe(transport_map.as_html(), height=650)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(
-        """
-    <div style="display: flex; justify-content: space-between; width: 100%;">
-        <a href="./notebooks/test.py" style="text-decoration: none;">← Previous page</a>
-        <a href="./../src/main.py" style="text-decoration: none;">Next page →</a>
-    </div>
-    """
-    )
     return
 
 

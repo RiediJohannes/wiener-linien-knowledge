@@ -17,6 +17,14 @@ Reading the database using rust took roughly 3 minutes before optimisation.
 - After deactivating trimming → 1 minute
 - Additional problem with times that extend beyond 23:59:59
 
+## Embeddings
+
+Look at comparative analysis paper:
+https://dl.acm.org/doi/pdf/10.1145/3424672  
+They were particularly fond of:
+- HAKE and its predecessor RotatE
+- ComplEx
+
 ## Time
 
 - 30.8.
@@ -48,6 +56,9 @@ Reading the database using rust took roughly 3 minutes before optimisation.
 - 5.9
   - 15:00-22:00
 
+- 6.9.
+  - 17:00-22:30
+
 
 ## Submission
 
@@ -61,3 +72,13 @@ https://www.data.gv.at/katalog/datasets/e4079286-310c-435a-af2d-64604ba9ade5
 
 Dockerizing my marimo app:  
 https://docs.marimo.io/guides/deploying/deploying_docker/#create-a-dockerfile
+
+
+##### Trying to make a multipage app
+
+```html
+<div style="display: flex; justify-content: space-between; width: 100%;">
+    <a href="./notebooks/test.py" style="text-decoration: none;">← Previous page</a>
+    <a href="./../src/main.py" style="text-decoration: none;">Next page →</a>
+</div>
+```
