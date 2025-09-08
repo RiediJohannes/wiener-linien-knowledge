@@ -635,8 +635,84 @@ def _(graph):
 
 @app.cell(hide_code=True)
 def _(mo):
+    triples_queries = {
+    "Existing transit connections": """
+    // Existing transit connections
+    MATCH (s1:Stop)-[conn:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]->(s2:Stop)
+    WHERE conn.yearly > 4 * 365
+    RETURN s1.id as head, type(conn) as rel, s2.id as tail""",
+
+    "Routes serving stops": """
+    // Routes serving stops
+    MATCH (t:Trip)-[:OPERATING_ON]->(ser:Service)
+    WITH t, sum(ser.operations_per_year) as operations
+    MATCH (r:Route)<-[:PART_OF_ROUTE]-(t)-[:STOPS_AT]->(s:Stop)
+    WITH r.short_name as route_name, s, sum(operations) as trip_count
+    WHERE trip_count >= 365
+    RETURN route_name as head, 'SERVES' as rel, s.id as tail""",
+
+    "Mode of transport of each route": """
+    // Mode of transport of each route
+    MATCH (r:Route)
+    RETURN DISTINCT r.short_name as head, 'IS_MODE_OF_TRANSPORT' as rel,
+    CASE r.type
+      WHEN 0 THEN 'TRAM'
+      WHEN 1 THEN 'SUBWAY'
+      WHEN 2 THEN 'TRAIN'
+      WHEN 3 THEN 'BUS'
+      ELSE 'SPECIAL'
+    END AS tail""",
+
+    "Stop locations in/nearby subdistricts": """
+    // Stop locations in/nearby subdistricts
+    MATCH (s:Stop:InUse)-[loc:LOCATED_NEARBY|LOCATED_IN]->(d:SubDistrict)
+    WITH s, loc, d.district_num + '-' + d.sub_district_num as subdistrict
+    RETURN s.id as head, type(loc) as rel, subdistrict as tail""",
+
+    "Neighbouring subdistricts": """
+    // Neighbouring subdistricts
+    MATCH (d1:SubDistrict)-[:NEIGHBOURS]->(d2:SubDistrict)
+    WITH d1, d2,
+        d1.district_num + '-' + d1.sub_district_num as left_neighbour,
+        d2.district_num + '-' + d2.sub_district_num as right_neighbour
+    RETURN left_neighbour as head, "NEIGHBOURS" as rel, right_neighbour as tail""",
+    
+    "Geographic proximity of stops": """
+    // Geographic proximity of stops
+    MATCH (s:Stop:InUse)-[c:IS_CLOSE_TO]->(t:Stop:InUse)
+    RETURN s.id as head, type(c) as rel, t.id as tail""",
+
+    "Classify districts by density": """
+    // Classify districts according to their density
+    MATCH (d:SubDistrict)
+    WITH d, d.district_num + "-" + d.sub_district_num as district,
+      CASE 
+        WHEN d.density > 20_000 THEN 'VERY_HIGH_DENSITY'
+        WHEN d.density > 10_000 THEN 'HIGH_DENSITY'  
+        WHEN d.density > 5000 THEN 'MEDIUM_DENSITY'
+        WHEN d.density > 1500 THEN 'LOW_DENSITY'
+        ELSE 'VERY_LOW_DENSITY'
+      END as density_category
+    RETURN district as head, 'HAS_DENSITY' as rel, density_category as tail""",
+
+    "Classify connections by frequency": """
+    // Frequency of direct connections
+    MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]->(s2:Stop)
+    WHERE conn.yearly > 4 * 365
+    WITH conn, s1, s2,
+      CASE 
+        WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
+        WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
+        WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
+        WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
+        WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
+        ELSE 'RARELY_TO'
+      END as level_of_service
+    RETURN s1.id as head, level_of_service as rel, s2.id as tail"""
+    }
+
     mo.md(
-        r"""
+        f"""
     # Knowledge Graph Embeddings
 
     Now, we are ready for this project's main goal, which is predicting missing connections in Vienna's public transport network. As the wording suggests, this becomes a classic **link prediction problem** in our knowledge graph. A key tool to tackle such problems are knowledge graph embeddings. In this chapter, we will use the popular KG embedding library **PyKEEN**.
@@ -648,99 +724,52 @@ def _(mo):
     ### Existing Transit Network
 
     ```cypher
-    // Existing transit connections with mode of transport
-    MATCH (s1:Stop)-[conn:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]->(s2:Stop)
-    WHERE conn.yearly > 4 * 365
-    RETURN s1.id as head, type(conn) as rel, s2.id as tail
+    {triples_queries["Existing transit connections"]}
     ```
 
     We exclude connections that happen fewer than four times a day (<1460 times a year) on average, since these mostly represent temporary reroutings due to construction work or special trips for operational reasons (e.g. ending a trip at a depot at the end of a day). Remember, this does not mean that e.g. a single bus line connects the two stops four times a day, but _ALL_ direct bus connections exceed four operations a day _on average_.
 
     ```cypher
-    // Routes serving stops
-    MATCH (t:Trip)-[:OPERATING_ON]->(ser:Service)
-    WITH t, sum(ser.operations_per_year) as operations
-    MATCH (r:Route)<-[:PART_OF_ROUTE]-(t)-[:STOPS_AT]->(s:Stop)
-    WITH r.short_name as route_name, s, sum(operations) as trip_count
-    WHERE trip_count >= 365
-    RETURN route_name as head, 'SERVES' as rel, s.id as tail
-
-    // Mode of transport of each route
-    MATCH (r:Route)
-    RETURN DISTINCT r.short_name as head, 'IS_MODE_OF_TRANSPORT' as rel,
-    CASE r.type
-      WHEN 0 THEN 'TRAM'
-      WHEN 1 THEN 'SUBWAY'
-      WHEN 2 THEN 'TRAIN'
-      WHEN 3 THEN 'BUS'
-      ELSE 'SPECIAL'
-    END AS tail
+    {triples_queries["Routes serving stops"]}
+    {triples_queries["Mode of transport of each route"]}
     ```
 
     Similarly as for the connection relations before, we discard some noise. In this case, we only consider a route to serve a particular stop if it stops there at least once per day on average.
 
     ### Geographic Location
 
+    Since the embedding model has no idea about Vienna's geography, we should represent the idea of proximity in our training data. 
+
     ```cypher
-    // Stop locations in/nearby subdistricts
-    MATCH (s:Stop:InUse)-[loc:LOCATED_NEARBY|LOCATED_IN]->(d:SubDistrict)
-    WITH s, loc, d.district_num + '-' + d.sub_district_num as subdistrict
-    RETURN s.id as head, type(loc) as rel, subdistrict as tail
-
-    // Neighbouring subdistricts
-    MATCH (d1:SubDistrict)-[:NEIGHBOURS]->(d2:SubDistrict)
-    WITH d1, d2,
-        d1.district_num + '-' + d1.sub_district_num as left_neighbour,
-        d2.district_num + '-' + d2.sub_district_num as right_neighbour
-    RETURN left_neighbour as head, "NEIGHBOURS" as rel, right_neighbour as tail
-
-    // Geographic proximity of stops
-    MATCH (s:Stop:InUse)-[c:IS_CLOSE_TO]->(t:Stop:InUse)
-    RETURN s.id as head, type(c) as rel, t.id as tail
+    {triples_queries["Stop locations in/nearby subdistricts"]}
+    {triples_queries["Neighbouring subdistricts"]}
+    {triples_queries["Geographic proximity of stops"]}
     ```
 
     ### Population Density
 
-    ```cypher
-    // Classify districts according to their density
-    MATCH (d:SubDistrict)
-    WITH d, d.district_num + "-" + d.sub_district_num as district,
-      CASE 
-        WHEN d.density > 20_000 THEN 'VERY_HIGH_DENSITY'
-        WHEN d.density > 10_000 THEN 'HIGH_DENSITY'  
-        WHEN d.density > 5000 THEN 'MEDIUM_DENSITY'
-        WHEN d.density > 1500 THEN 'LOW_DENSITY'
-        ELSE 'VERY_LOW_DENSITY'
-      END as density_category
-    RETURN district as head, 'HAS_DENSITY' as rel, density_category as tail
+    In addition to knowing which stops serve which district, it is also paramount to know their population density to estimate the demand for public transport. Ideally, the embedding model will draw the conclusion that high-density subdistricts need frequent transit connections. 
 
-    // Stops in high-demand areas
-    MATCH (s:Stop:InUse)-[:LOCATED_NEARBY]->(d:SubDistrict)
-    WHERE d.population_density > 5000
-    RETURN s.id, 'IN_HIGH_DEMAND_AREA', 'HIGH_DEMAND'
+    ```cypher
+    {triples_queries["Classify districts by density"]}
     ```
 
     ### Level of Service
 
+    Lastly, we categorize connections between stops regarding their frequency of operation. This complements the information about the type of connection (mode of transport) we gave earlier and hopefully correlates with population density.
+
     ```cypher
-    // High-frequency connections
-    MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]->(s2:Stop)
-    WHERE conn.yearly > 10000  // Adjust threshold
-    RETURN s1.id, 'HIGH_FREQUENCY_TO', s2.id
-
-    // Transfer hubs (stops with many connections)
-    MATCH (s:Stop)
-    WITH s, size((s)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-()) as connection_count
-    WHERE connection_count > 5
-    RETURN s.id, 'IS_HUB', 'TRANSFER_HUB'
+    {triples_queries["Classify connections by frequency"]}
     ```
-
-    stop_in_high_density_area + SHOULD_CONNECT_TO ≈ stop_in_high_density_area
-    stop_A + GEOGRAPHICALLY_CLOSE ≈ stop_B → Maybe they should be connected
-    district + HIGH_DENSITY ≈ DENSE_AREA → Stops in dense areas need good connections
-    stop + IS_WELL_CONNECTED ≈ HUB → Hubs should connect to underserved areas
     """
     )
+    return (triples_queries,)
+
+
+@app.cell
+def _(graph, triples_queries):
+    fact_triples = graph.query_triples(triples_queries)
+    fact_triples
     return
 
 
@@ -753,13 +782,13 @@ def _(graph):
             MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]->(s2:Stop)
             RETURN s1.id as head, type(conn) as relation, s2.id as tail
             """,
-        
+
             # 2. Geographic context
             """
             MATCH (s:Stop)-[:LOCATED_NEARBY]->(d:SubDistrict)
             RETURN s.id as head, 'LOCATED_IN' as relation, d.id as tail
             """,
-        
+
             # 3. Demand indicators
             """
             MATCH (d:SubDistrict)
@@ -770,7 +799,7 @@ def _(graph):
                 ELSE 'LOW_DENSITY' END as category
             RETURN d.id as head, 'HAS_DENSITY' as relation, category as tail
             """,
-        
+
             # 4. Service patterns
             """
             MATCH (s:Stop)
@@ -778,7 +807,7 @@ def _(graph):
             WHERE conn_count > 3
             RETURN s.id as head, 'IS_WELL_CONNECTED' as relation, 'HUB' as tail
             """,
-        
+
             # 5. Geographic proximity without connection (important!)
             """
             MATCH (s1:Stop)-[:LOCATED_NEARBY]->(d1:SubDistrict)
@@ -788,14 +817,14 @@ def _(graph):
             RETURN s1.id as head, 'NEARBY_UNCONNECTED' as relation, s2.id as tail
             """,
         ]
-    
+
         all_triples = []
         for query in queries:
             response = graph.execute_query(query)
-            triples = [(rec['head'], rec['relation'], rec['tail']) for rec in response]
+            triples = [(rec['head'], rec['rel'], rec['tail']) for rec in response]
             all_triples.extend(triples)
             print(f"Added {len(triples)} triples from query")
-    
+
         return all_triples
     return
 
@@ -809,8 +838,6 @@ def _(mo):
     Next comes the setup for model training. We will train two models using different KG embedding algorithms and comparatively analyze their results.
 
     ### Model 1: RotatE
-
-
     """
     )
     return

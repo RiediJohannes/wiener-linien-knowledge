@@ -52,7 +52,8 @@ They were particularly fond of:
   - 17:00-22:30
   - 0:00-3:00
 - 7.9
-  - 16:00
+  - 16:00 - 22:30
+  - 1:30-
 
 
 ## Submission

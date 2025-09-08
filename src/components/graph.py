@@ -234,6 +234,16 @@ def connect_stop_to_subdistricts(stops_with_districts: list[tuple[str, list[str]
     return execute_operation(query, stop_district_pairs=stop_district_pairs)
 
 
+def query_triples(names_queries: dict[str, str]) -> dict[str, tuple[str, str, str]]:
+    triples_dict = {}
+    for name, query in names_queries.items():
+        print(f"Running query '{name}'...")
+        records = execute_query(query)
+        triples_dict[name] = [(triple["head"], triple["rel"], triple["tail"]) for triple in records]
+        print(f"✅ Received {len(records)} triples")
+
+    return triples_dict
+
 def execute_operation(cypher_operation, **params) -> ResultSummary | None:
     """
     Runs a cypher query that executes some create/update/delete operations on the connected neo4j instance.
