@@ -11,7 +11,8 @@ def imports():
     import src.components.graph as graph
     import src.components.geo_spatial as geo
     import src.components.presentation as present
-    return geo, graph, mo, present
+    import src.components.learning as learning
+    return geo, graph, learning, mo, present
 
 
 @app.cell(hide_code=True)
@@ -676,7 +677,7 @@ def _(mo):
         d1.district_num + '-' + d1.sub_district_num as left_neighbour,
         d2.district_num + '-' + d2.sub_district_num as right_neighbour
     RETURN left_neighbour as head, "NEIGHBOURS" as rel, right_neighbour as tail""",
-    
+
     "Geographic proximity of stops": """
     // Geographic proximity of stops
     MATCH (s:Stop:InUse)-[c:IS_CLOSE_TO]->(t:Stop:InUse)
@@ -769,64 +770,7 @@ def _(mo):
 @app.cell
 def _(graph, triples_queries):
     fact_triples = graph.query_triples(triples_queries)
-    fact_triples
-    return
-
-
-@app.cell
-def _(graph):
-    def generate_training_triples():
-        queries = [
-            # 1. Core transit network
-            """
-            MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]->(s2:Stop)
-            RETURN s1.id as head, type(conn) as relation, s2.id as tail
-            """,
-
-            # 2. Geographic context
-            """
-            MATCH (s:Stop)-[:LOCATED_NEARBY]->(d:SubDistrict)
-            RETURN s.id as head, 'LOCATED_IN' as relation, d.id as tail
-            """,
-
-            # 3. Demand indicators
-            """
-            MATCH (d:SubDistrict)
-            WITH d, CASE 
-                WHEN d.population_density > 8000 THEN 'VERY_HIGH_DENSITY'
-                WHEN d.population_density > 5000 THEN 'HIGH_DENSITY'
-                WHEN d.population_density > 2000 THEN 'MEDIUM_DENSITY'
-                ELSE 'LOW_DENSITY' END as category
-            RETURN d.id as head, 'HAS_DENSITY' as relation, category as tail
-            """,
-
-            # 4. Service patterns
-            """
-            MATCH (s:Stop)
-            WITH s, size((s)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-()) as conn_count
-            WHERE conn_count > 3
-            RETURN s.id as head, 'IS_WELL_CONNECTED' as relation, 'HUB' as tail
-            """,
-
-            # 5. Geographic proximity without connection (important!)
-            """
-            MATCH (s1:Stop)-[:LOCATED_NEARBY]->(d1:SubDistrict)
-            MATCH (s2:Stop)-[:LOCATED_NEARBY]->(d2:SubDistrict) 
-            WHERE d1 <> d2 AND distance(s1, s2) < 800
-            AND NOT EXISTS((s1)-[:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2))
-            RETURN s1.id as head, 'NEARBY_UNCONNECTED' as relation, s2.id as tail
-            """,
-        ]
-
-        all_triples = []
-        for query in queries:
-            response = graph.execute_query(query)
-            triples = [(rec['head'], rec['rel'], rec['tail']) for rec in response]
-            all_triples.extend(triples)
-            print(f"Added {len(triples)} triples from query")
-
-        return all_triples
-    return
+    return (fact_triples,)
 
 
 @app.cell(hide_code=True)
@@ -836,23 +780,157 @@ def _(mo):
     ## Model Training
 
     Next comes the setup for model training. We will train two models using different KG embedding algorithms and comparatively analyze their results.
-
-    ### Model 1: RotatE
     """
     )
     return
 
 
 @app.cell
-def _():
+def _(fact_triples, learning):
+    # Index the entities/relations in the triples and split them into training, validation and testing data 
+    training, validation, testing = learning.generate_training_set(fact_triples)
+
+    # Prepare model training configurations
+    training_configs = {
+        'TransE': {
+            'model': 'TransE',
+            'device':'cpu',
+            'model_kwargs': {'embedding_dim': 128, 'scoring_fct_norm': 1}, # L1 norm said to work better with TransE
+            'optimizer_kwargs': {'lr': 0.001},
+            'training_kwargs': {'num_epochs': 200, 'batch_size': 256},
+            'negative_sampler':'basic',
+            'negative_sampler_kwargs': dict(num_negs_per_pos=20),
+            'loss': 'MarginRankingLoss',
+            'loss_kwargs': {'margin': 1.0},
+            'stopper': 'early',
+            'stopper_kwargs':dict(
+                patience=25,
+                frequency=15,
+            )
+        },
+
+        'RotatE': {
+            'model': 'RotatE', 
+            'device':'cpu',
+            'model_kwargs': {'embedding_dim': 256},
+            'optimizer_kwargs': {'lr': 0.0005, 'weight_decay': 1e-6},
+            'training_kwargs': {'num_epochs': 300, 'batch_size': 256},
+            'loss': 'SoftplusLoss',
+            'negative_sampler':'basic',
+            'negative_sampler_kwargs': dict(num_negs_per_pos=20),
+            'stopper': 'early',
+            'stopper_kwargs':dict(
+                patience=25,
+                frequency=15,
+            )
+        },
+
+        'ComplEx': {
+            'model': 'ComplEx',
+            'device':'cpu',
+            'model_kwargs': {'embedding_dim': 200},
+            'optimizer': 'Adagrad', # said to work better with ComplEx
+            'optimizer_kwargs': {'lr': 0.001, 'weight_decay': 1e-6},
+            'training_kwargs': {'num_epochs': 250, 'batch_size': 512},
+            'negative_sampler':'basic',
+            'negative_sampler_kwargs': dict(num_negs_per_pos=20),
+            'loss': 'SoftplusLoss',
+            'stopper': 'early',
+            'stopper_kwargs':dict(
+                patience=25,
+                frequency=15,
+            )
+        }
+    }
+    return testing, training, training_configs, validation
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""### Model 1: RotatE""")
+    return
+
+
+@app.cell
+def _(learning, testing, training, training_configs, validation):
+    _model = 'RotatE'
+    rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
+    rotate_results
+    return
+
+
+@app.cell
+def _(training_results):
+    training_results['RotatE'].save_to_directory("trained_models/complex")
+    return
+
+
+@app.cell
+def _(learning):
+    model, tf = learning.load_model("trained_models/rotate")
+    model
+    tf
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""### Model 2: ComplEx""")
+    return
+
+
+@app.cell
+def _(learning, testing, training, training_configs, validation):
+    _model = 'ComplEx'
+    complex_results = learning.train_model(training, validation, testing, training_configs[_model])
+    complex_results
+    return
+
+
+@app.cell
+def _(pd, results, ui):
+    #training_results[_model] = {
+    #    'hits_at_10': result.metric_results.get_metric('hits@10'),
+    #    'mrr': result.metric_results.get_metric('mean_reciprocal_rank'),
+    #    'training_time': result.training_time,
+    #}
+
+    #print(f"{model_name} Results:")
+    #print(f"  Hits@10: {results[model_name]['hits_at_10']:.3f}")
+    #print(f"  MRR: {results[model_name]['mrr']:.3f}")
+    #print(f"  Time: {results[model_name]['training_time']:.1f}s\n")
+
+    #result['RotatE'].metric_results.to_df(by='relation')
+
+    # Collect metrics into one DataFrame
+    df_results = pd.DataFrame({
+        model: results[model].metric_results.to_flat_dict()
+        for model in results
+    }).T  # transpose: models as rows
+
+
+    cards = [
+        ui.card(
+            header=model,
+            content=f"""
+            **MRR:** {df_results.loc[model, 'mrr']:.3f}  
+            **Hits@1:** {df_results.loc[model, 'hits@1']:.3f}  
+            **Hits@3:** {df_results.loc[model, 'hits@3']:.3f}  
+            **Hits@10:** {df_results.loc[model, 'hits@10']:.3f}  
+            """
+        )
+        for model in df_results.index
+    ]
+
+    ui.row(cards)   # put cards next to each other
     return
 
 
 @app.cell
 def _(graph, mo, present):
-    _stops = graph.get_stops(id_list=["at:49:1418:0:4", "at:49:466:0:1"])
+    #_stops = graph.get_stops() #id_list=["at:49:1418:0:4", "at:49:466:0:1"]
     #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
-    #_stops = graph.get_stops_for_subdistrict(10, 1)
+    _stops = graph.get_stops_for_subdistrict(11, 2)
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
     # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',

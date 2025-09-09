@@ -234,15 +234,15 @@ def connect_stop_to_subdistricts(stops_with_districts: list[tuple[str, list[str]
     return execute_operation(query, stop_district_pairs=stop_district_pairs)
 
 
-def query_triples(names_queries: dict[str, str]) -> dict[str, tuple[str, str, str]]:
-    triples_dict = {}
+def query_triples(names_queries: dict[str, str]) -> list[tuple[str, str, str]]:
+    triples = []
     for name, query in names_queries.items():
         print(f"Running query '{name}'...")
         records = execute_query(query)
-        triples_dict[name] = [(triple["head"], triple["rel"], triple["tail"]) for triple in records]
+        triples.extend([(triple["head"], triple["rel"], triple["tail"]) for triple in records])
         print(f"✅ Received {len(records)} triples")
 
-    return triples_dict
+    return triples
 
 def execute_operation(cypher_operation, **params) -> ResultSummary | None:
     """

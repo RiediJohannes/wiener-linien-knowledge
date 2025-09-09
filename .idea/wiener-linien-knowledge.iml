@@ -5,6 +5,8 @@
       <sourceFolder url="file://$MODULE_DIR$/initializer/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/initializer/target" />
+      <excludeFolder url="file://$MODULE_DIR$/trained_models" />
+      <excludeFolder url="file://$MODULE_DIR$/trained_models/rotate" />
     </content>
     <orderEntry type="jdk" jdkName="uv (wiener-linien-knowledge)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
