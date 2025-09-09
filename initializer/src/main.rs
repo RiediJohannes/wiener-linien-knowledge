@@ -61,7 +61,7 @@ async fn main() {
         ("(ex:ServiceException)", "(ex.service_id)"),
         ("(s:Stop)", "(s.lon)"),
         ("(s:Stop)", "(s.lat)"),
-        ("()-[at:STOPS_AT]-())", "(at.stop_sequence)"),
+        ("()-[at:STOPS_AT]-()", "(at.stop_sequence)"),
     ];
     for (node, prop) in index_queries {
         graph.run(neo4rs::query(&format!(
@@ -148,14 +148,16 @@ async fn main() {
             "Trips",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/trips.txt' AS row
-        MATCH (r:Route {id: row.route_id})
-        MATCH (s:Service {id: row.service_id})
-        MERGE (t:Trip {id: row.trip_id})
-          SET t.headsign = row.trip_headsign,
-              t.direction = toInteger(row.direction_id),
-              t.block = row.block_id
-        MERGE (t)-[:PART_OF_ROUTE]->(r)
-        MERGE (t)-[:OPERATING_ON]->(s)
+        CALL (row) {
+            MATCH (r:Route {id: row.route_id})
+            MATCH (s:Service {id: row.service_id})
+            MERGE (t:Trip {id: row.trip_id})
+            SET t.headsign = row.trip_headsign,
+                t.direction = toInteger(row.direction_id),
+                t.block = row.block_id
+            MERGE (t)-[:PART_OF_ROUTE]->(r)
+            MERGE (t)-[:OPERATING_ON]->(s)
+        } IN TRANSACTIONS OF 10000 ROWS
         "#,
         ),
         (
