@@ -794,7 +794,6 @@ def _(fact_triples, learning):
     training_configs = {
         'TransE': {
             'model': 'TransE',
-            'device':'cpu',
             'model_kwargs': {'embedding_dim': 128, 'scoring_fct_norm': 1}, # L1 norm said to work better with TransE
             'optimizer_kwargs': {'lr': 0.001},
             'training_kwargs': {'num_epochs': 200, 'batch_size': 256},
@@ -811,7 +810,6 @@ def _(fact_triples, learning):
 
         'RotatE': {
             'model': 'RotatE', 
-            'device':'cpu',
             'model_kwargs': {'embedding_dim': 256},
             'optimizer_kwargs': {'lr': 0.0005, 'weight_decay': 1e-6},
             'training_kwargs': {'num_epochs': 300, 'batch_size': 256},
@@ -827,7 +825,6 @@ def _(fact_triples, learning):
 
         'ComplEx': {
             'model': 'ComplEx',
-            'device':'cpu',
             'model_kwargs': {'embedding_dim': 200},
             'optimizer': 'Adagrad', # said to work better with ComplEx
             'optimizer_kwargs': {'lr': 0.001, 'weight_decay': 1e-6},
@@ -854,7 +851,11 @@ def _(mo):
 @app.cell
 def _(learning, testing, training, training_configs, validation):
     _model = 'RotatE'
+    _save_path = "trained_models/rotate"
+
     rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
+    rotate_results.save_to_directory(_save_path)
+
     rotate_results
     return
 
@@ -868,8 +869,7 @@ def _(training_results):
 @app.cell
 def _(learning):
     model, tf = learning.load_model("trained_models/rotate")
-    model
-    tf
+    model, tf
     return
 
 
@@ -882,7 +882,11 @@ def _(mo):
 @app.cell
 def _(learning, testing, training, training_configs, validation):
     _model = 'ComplEx'
+    _save_path = "trained_models/complex"
+
     complex_results = learning.train_model(training, validation, testing, training_configs[_model])
+    complex_results.save_to_directory(_save_path)
+
     complex_results
     return
 

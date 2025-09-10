@@ -62,6 +62,10 @@ They were particularly fond of:
 
 ### Data sources
 
+Population data:
+
+https://www.data.gv.at/katalog/datasets/09e70f89-cadf-4a3b-a29a-2b3f3c6cbd71
+
 Subdistrict names:  
 https://www.data.gv.at/katalog/datasets/ae8d7db5-98e9-4f86-bbec-9babfa2a4f03
 
