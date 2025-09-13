@@ -122,21 +122,7 @@ def detect_station_exits(graph):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    ### Finding representative cluster roots
-
-    So far, we have organized related stops into clusters that are represented by a root node with the tag `ClusterStop`. However, the choice of this cluster stop was merely arbitrary. Now, we want to determine a rightful representative by choosing the stop with the most traffic among all stops in the cluster.
-
-    Therefore, we count the stop times scheduled for each cluster and make the busiest stop the new cluster stop.
-    """
-    )
-    return
-
-
-@app.cell
-def reassign_cluster_stops(graph):
-    _operation = """
+    operation_assign_cluster_root = """
     // For each cluster, rank members by usage
     MATCH (stop:Stop)-[:IN_CLUSTER]->(parent:ClusterStop)
     OPTIONAL MATCH (stop)<-[:STOPS_AT]-(t:Trip)
@@ -155,29 +141,31 @@ def reassign_cluster_stops(graph):
     RETURN count(*)
     """
 
+    mo.md(fr"""
+    ### Finding representative cluster roots
+
+    So far, we have organized related stops into clusters that are represented by a root node with the tag `ClusterStop`. However, the choice of this cluster stop was merely arbitrary. Now, we want to determine a rightful representative by choosing the stop with the most traffic among all stops in the cluster.
+
+    Therefore, we count the stop times scheduled for each cluster and make the busiest stop the new cluster stop.
+    ```cypher
+    {operation_assign_cluster_root}
+    ```
+    """
+    )
+    return (operation_assign_cluster_root,)
+
+
+@app.cell
+def reassign_cluster_stops(graph, operation_assign_cluster_root):
     print("Re-assigning cluster stops...")
-    _affected_rows = graph.execute_operation_returning_count(_operation)
+    _affected_rows = graph.execute_operation_returning_count(operation_assign_cluster_root)
     print(f"Affected {_affected_rows} nodes")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    ### Move transport-related relationships to cluster stop
-
-    Now that we have created clusters with the busiest stop in them as their root node (the `ClusterStop`), we move all `:STOPS_AT` relationships of the other nodes in the cluster to that `ClusterStop` instead.
-
-    **WARNING**: Be aware that this is a very expensive operation and might take a while to finish execution.
-    """
-    )
-    return
-
-
-@app.cell
-def _(graph):
-    _expensive_operation = """
+    operation_move_stop_relations_to_root = """
     MATCH (:Trip)-[at:STOPS_AT]->(s:Stop)-[:IN_CLUSTER]->(c:Stop:ClusterStop)
     WHERE s.id <> c.id
     CALL (at, c) {
@@ -187,8 +175,24 @@ def _(graph):
     RETURN sum(refactoredCount) AS movedRelationships
     """
 
+    mo.md(fr"""
+    ### Move transport-related relationships to cluster stop
+
+    Now that we have created clusters with the busiest stop in them as their root node (the `ClusterStop`), we move all `:STOPS_AT` relationships of the other nodes in the cluster to that `ClusterStop` instead.
+
+    ```cypher
+    {operation_move_stop_relations_to_root}
+    ```
+    **WARNING**: Be aware that this is a very expensive operation and might take a while to finish execution.
+    """
+    )
+    return (operation_move_stop_relations_to_root,)
+
+
+@app.cell
+def _(graph, operation_move_stop_relations_to_root):
     print("Moving over all :STOPS_AT relationships to cluster roots...")
-    _response = graph.execute_batched_query(_expensive_operation)
+    _response = graph.execute_batched_query(operation_move_stop_relations_to_root)
     _moved_relationships: int = int(_response[0][0]) if _response else 0
     print(f"Moved a total of {_moved_relationships} :STOPS_AT relationships")
     return
@@ -202,27 +206,29 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    ## Matching stops to districts
-    Our next goal is to match each stop to Viennese registration districts they serve in order to get a rough grasp on how many people can benefit them. 
-    First, let's delete stops entirely that are located outside the Vienna city boundary. Most notably, this includes many stops of the _Badner Bahn_ that reach all the way to _Baden bei Wien_.
-
-    This is a simple task by relying again on the semantics of the stop IDs. Stops whose ID starts with `at:49` are within Vienna whereas stops with `at:43` at the beginning of their ID are located outside Vienna. Thus, we find and delete the latter.
-    """
-    )
-    return
-
-
-@app.cell
-def _(graph):
-    _operation = """
+    operation_delete_stops_outside_vienna = """
     MATCH (s:Stop)
     WHERE s.id STARTS WITH 'at:43:'
     DETACH DELETE s
     """
 
-    _summary = graph.execute_operation(_operation)
+    mo.md(fr"""
+    ## Matching stops to districts
+    Our next goal is to match each stop to Viennese registration districts they serve in order to get a rough grasp on how many people can benefit them. 
+    First, let's delete stops entirely that are located outside the Vienna city boundary. Most notably, this includes many stops of the _Badner Bahn_ that reach all the way to _Baden bei Wien_.
+
+    This is a simple task by relying again on the semantics of the stop IDs. Stops whose ID starts with `at:49` are within Vienna whereas stops with `at:43` at the beginning of their ID are located outside Vienna. Thus, we find and delete the latter.
+    ```cypher
+    {operation_delete_stops_outside_vienna}
+    ```
+    """
+    )
+    return (operation_delete_stops_outside_vienna,)
+
+
+@app.cell
+def _(graph, operation_delete_stops_outside_vienna):
+    _summary = graph.execute_operation(operation_delete_stops_outside_vienna)
     print(f"Deleted {_summary.counters.nodes_deleted} nodes")
     return
 
@@ -252,8 +258,24 @@ def match_stops_with_districts(geo, graph):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    operation_cluster_located_nearby = """
+    MATCH (s:Stop)-[:IN_CLUSTER]->(c:ClusterStop),
+          (s)-[:LOCATED_NEARBY]->(d:SubDistrict)
+    WHERE NOT (c)-[:LOCATED_NEARBY]->(d)
+    MERGE (c)-[:LOCATED_NEARBY]->(d);
+    """
+
+    operation_cluster_located_in = """
+    MATCH (c:ClusterStop)<-[:IN_CLUSTER]-(s:Stop)
+    WITH c, count(s) as clusterSize
+    MATCH (c)<-[:IN_CLUSTER]-(s:Stop)-[:LOCATED_IN]->(d:SubDistrict)
+    WHERE NOT (c)-[:LOCATED_IN]->(d)
+    WITH c, d, count(s) as stopsInDistrict, clusterSize
+    WHERE stopsInDistrict >= clusterSize / 2 OR stopsInDistrict >= 3
+    MERGE (c)-[:LOCATED_IN]->(d)
+    """
+
+    mo.md(fr"""
     Additionally, we define:
     > For any cluster $C$, if **there exists** a stop $s \in C$ such that $s$ is **located nearby** a subdistrict $d$, then the cluster stop $c \in C$ is also considered nearby $d$.
 
@@ -262,71 +284,55 @@ def _(mo):
 
     This can be solved using two simple cypher queries:
     ```cypher
-    MATCH (s:Stop)-[:IN_CLUSTER]->(c:ClusterStop),
-          (s)-[:LOCATED_NEARBY]->(d:SubDistrict)
-    WHERE NOT (c)-[:LOCATED_NEARBY]->(d)
-    MERGE (c)-[:LOCATED_NEARBY]->(d);
+    {operation_cluster_located_nearby}
     ```
 
     ```cypher
-    MATCH (c:ClusterStop)<-[:IN_CLUSTER]-(s:Stop)
-    WITH c, count(s) as clusterSize
-    MATCH (c)<-[:IN_CLUSTER]-(s:Stop)-[:LOCATED_IN]->(d:SubDistrict)
-    WHERE NOT (c)-[:LOCATED_IN]->(d)
-    WITH c, d, count(s) as stopsInDistrict, clusterSize
-    WHERE stopsInDistrict >= clusterSize / 2 OR stopsInDistrict >= 3
-    MERGE (c)-[:LOCATED_IN]->(d)
+    {operation_cluster_located_in}
     ```
     """
     )
-    return
+    return operation_cluster_located_in, operation_cluster_located_nearby
 
 
 @app.cell
-def functions_entails_vicinity(graph):
-    _operation = """
-    MATCH (s:Stop)-[:IN_CLUSTER]->(c:ClusterStop),
-          (s)-[:LOCATED_NEARBY]->(d:SubDistrict)
-    WHERE NOT (c)-[:LOCATED_NEARBY]->(d)
-    MERGE (c)-[:LOCATED_NEARBY]->(d);
-    """
-
-    _summary = graph.execute_operation(_operation)
+def functions_entails_vicinity(
+    graph,
+    operation_cluster_located_in,
+    operation_cluster_located_nearby,
+):
+    # Located nearby relationships
+    _summary = graph.execute_operation(operation_cluster_located_nearby)
     print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
 
-
-    _operation = """
-    MATCH (c:ClusterStop)<-[:IN_CLUSTER]-(s:Stop)
-    WITH c, count(s) as clusterSize
-    MATCH (c)<-[:IN_CLUSTER]-(s:Stop)-[:LOCATED_IN]->(d:SubDistrict)
-    WHERE NOT (c)-[:LOCATED_IN]->(d)
-    WITH c, d, count(s) as stopsInDistrict, clusterSize
-    WHERE stopsInDistrict >= clusterSize / 2 OR stopsInDistrict >= 3
-    MERGE (c)-[:LOCATED_IN]->(d)
-    """
-
-    _summary = graph.execute_operation(_operation)
+    # Located in relationships
+    _summary = graph.execute_operation(operation_cluster_located_in)
     print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Lastly, we calculate the average position of all stops in a cluster and store that as the position of the overall cluster in the cluster stop for display purposes.""")
-    return
-
-
-@app.cell
-def _(graph):
-    _operation = """
+    operation_cluster_position = """
     MATCH (s:Stop)-[:IN_CLUSTER]->(c:ClusterStop)
     WITH c, avg(s.lat) AS cluster_lat, avg(s.lon) AS cluster_lon
     SET c.cluster_lat = cluster_lat,
         c.cluster_lon = cluster_lon
     """
 
+    mo.md(fr"""
+    Lastly, we calculate the average position of all stops in a cluster and store that as the position of the overall cluster in the cluster stop for display purposes.
+    ```cypher
+    {operation_cluster_position}
+    ```
+    """)
+    return (operation_cluster_position,)
+
+
+@app.cell
+def _(graph, operation_cluster_position):
     print("Calculating the average position")
-    _summary = graph.execute_operation(_operation)
+    _summary = graph.execute_operation(operation_cluster_position)
     print(f"Set {_summary.counters.properties_set} properties")
     return
 
@@ -463,8 +469,27 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
+    operation_find_related_stops = """
+    MATCH (s:Stop:InUse), (t:Stop:InUse)
+    WHERE s.id < t.id
+    WITH s, t,
+         point({
+           latitude: CASE WHEN s:ClusterStop THEN s.cluster_lat ELSE s.lat END,
+           longitude: CASE WHEN s:ClusterStop THEN s.cluster_lon ELSE s.lon END
+         }) AS s_location,
+         point({
+           latitude: CASE WHEN t:ClusterStop THEN t.cluster_lat ELSE t.lat END,
+           longitude: CASE WHEN t:ClusterStop THEN t.cluster_lon ELSE t.lon END
+         }) AS t_location
+    WITH s, t, s_location, t_location,
+       point.distance(s_location, t_location) AS distance_meters
+    WHERE distance_meters < 800
+    MERGE (s)-[:IS_CLOSE_TO {distance: distance_meters}]->(t)
+    MERGE (t)-[:IS_CLOSE_TO {distance: distance_meters}]->(s)
+    """
+
     mo.md(
-        r"""
+        fr"""
     ## Finding relations between stops
 
     ### Geographic proximity of stops
@@ -472,65 +497,24 @@ def _(mo):
     First, we collect all pairs of stops that are within 800 meters of each other and connect them by a symmetric `:IS_CLOSE_TO` relationship. For points that are the root of a cluster, we take the geographic midpoint of that cluster which we calculated earlier.
 
     ```cypher
-    MATCH (s:Stop:InUse), (t:Stop:InUse)
-    WHERE s.id < t.id
-    WITH s, t,
-         point({
-           latitude: CASE WHEN s:ClusterStop THEN s.cluster_lat ELSE s.lat END,
-           longitude: CASE WHEN s:ClusterStop THEN s.cluster_lon ELSE s.lon END
-         }) AS s_location,
-         point({
-           latitude: CASE WHEN t:ClusterStop THEN t.cluster_lat ELSE t.lat END,
-           longitude: CASE WHEN t:ClusterStop THEN t.cluster_lon ELSE t.lon END
-         }) AS t_location
-    WITH s, t, s_location, t_location,
-       point.distance(s_location, t_location) AS distance_meters
-    WHERE distance_meters < 800
-    MERGE (s)-[:IS_CLOSE_TO {distance: distance_meters}]->(t)
-    MERGE (t)-[:IS_CLOSE_TO {distance: distance_meters}]->(s)
+    {operation_find_related_stops}
     ```
     """
     )
-    return
+    return (operation_find_related_stops,)
 
 
 @app.cell
-def _(graph):
-    _operation = """
-    MATCH (s:Stop:InUse), (t:Stop:InUse)
-    WHERE s.id < t.id
-    WITH s, t,
-         point({
-           latitude: CASE WHEN s:ClusterStop THEN s.cluster_lat ELSE s.lat END,
-           longitude: CASE WHEN s:ClusterStop THEN s.cluster_lon ELSE s.lon END
-         }) AS s_location,
-         point({
-           latitude: CASE WHEN t:ClusterStop THEN t.cluster_lat ELSE t.lat END,
-           longitude: CASE WHEN t:ClusterStop THEN t.cluster_lon ELSE t.lon END
-         }) AS t_location
-    WITH s, t, s_location, t_location,
-       point.distance(s_location, t_location) AS distance_meters
-    WHERE distance_meters < 800
-    MERGE (s)-[:IS_CLOSE_TO {distance: distance_meters}]->(t)
-    MERGE (t)-[:IS_CLOSE_TO {distance: distance_meters}]->(s)
-    """
-
+def _(graph, operation_find_related_stops):
     print("Finding pairs of geographically close stops...")
-    _summary = graph.execute_operation(_operation)
+    _summary = graph.execute_operation(operation_find_related_stops)
     print(f"Added {int(_summary.counters.relationships_created / 2)} symmetric :IS_CLOSE_TO relationships")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    ### Transit connections between stops
-
-    Our next main goal is to detect the **frequency of a direct public transport connections** from one stop to another. In the end, we would like every stop `s` in our graph to contain relationships of the form `(s)-[:X_CONNECTS_TO]->(t)` for every stop `t` it has a _direct_ connection to at least once per year, where `X` is replaced by the mode of transport ($X \in \{\texttt{BUS}, \texttt{TRAM}, \texttt{SUBWAY}\}$).
-
-    For that, we first calculate an approximation of the number of times a single trip is operated per year: 
-    ```cypher
+    operation_calculate_frequency_of_trips = """
     MATCH (s:Service)
     // Calculate (approximately) how many times a year the trip is operated regularly
     WITH s,
@@ -543,41 +527,38 @@ def _(mo):
     WITH s, regular_operations_per_year, count(DISTINCT ex.date) AS removed_days
     // Store the result in a property of each schedule node
     SET s.operations_per_year = regular_operations_per_year - removed_days;
+    """
+
+
+    mo.md(r"""
+    ### Transit connections between stops
+
+    Our next main goal is to detect the **frequency of a direct public transport connections** from one stop to another. In the end, we would like every stop `s` in our graph to contain relationships of the form `(s)-[:X_CONNECTS_TO]->(t)` for every stop `t` it has a _direct_ connection to at least once per year, where `X` is replaced by the mode of transport ($X \in \{\texttt{BUS}, \texttt{TRAM}, \texttt{SUBWAY}\}$).
+    """ +
+    fr"""
+
+    For that, we first calculate an approximation of the number of times a single trip is operated per year: 
+    ```cypher
+    {operation_calculate_frequency_of_trips}
     ```
 
     The value obtained by this query is not the exact number of trips in the year 2024, since it only considers the number of weeks in a year instead of the exact number of Mondays, Tuesdays, etc. in the year 2024. However, the numbers should be within roughly $2\%$ of the true value and basically represent a year-on-year average for each trip.
     """
     )
-    return
+    return (operation_calculate_frequency_of_trips,)
 
 
 @app.cell
-def calculate_trips_per_year(graph):
-    _operation = """
-    MATCH (s:Service)
-    // Calculate (approximately) how many times a year the trip is operated regularly
-    WITH s,
-        s.monday + s.tuesday + s.wednesday + s.thursday + s.friday + s.saturday + s.sunday AS days_per_week,
-        duration.inDays(s.start_date, s.end_date).days + 1 AS operational_days
-    WITH s,
-        toInteger(ceil((operational_days / 7.0) * days_per_week)) as regular_operations_per_year
-    // If there are some exceptions to the schedule, subtract them
-    OPTIONAL MATCH (s)<-[:FOR_SERVICE]-(ex:ServiceException:RemovedService)
-    WITH s, regular_operations_per_year, count(DISTINCT ex.date) AS removed_days
-    // Store the result in a property of each schedule node
-    SET s.operations_per_year = regular_operations_per_year - removed_days;
-    """
-
+def calculate_trips_per_year(graph, operation_calculate_frequency_of_trips):
     print("Calculating operations per year for every trip...")
-    _summary = graph.execute_operation(_operation)
+    _summary = graph.execute_operation(operation_calculate_frequency_of_trips)
     print(f"Calculated and (re)set {_summary.counters.properties_set} properties")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     Next, we find every pair of stops $(s1, s2)$ such that some trip $t$ directly connects $s1$ to $s2$ (in that order). We aggregate over all such trips $t$ and sum their operations per year to get the total number of direct connections $s1 \to s2$ in a year.  
     Note that such trips do not necessarily move between the exact stops $s1$ and $s2$ but between two stops within their (separate) clusters, as we have previously moved all `:STOPS_AT` relationships to a cluster's root node.
 
