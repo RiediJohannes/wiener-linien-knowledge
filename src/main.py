@@ -838,6 +838,13 @@ def _(mo):
 
 @app.cell
 def _(fact_triples, learning):
+    d = learning.generate_training_set(fact_triples)
+    d
+    return
+
+
+app._unparsable_cell(
+    r"""
     # Index the entities/relations in the triples and split them into training, validation and testing data 
     training, validation, testing = learning.generate_training_set(fact_triples)
 
@@ -878,11 +885,12 @@ def _(fact_triples, learning):
             'model': 'ComplEx',
             'model_kwargs': {'embedding_dim': 200},
             'optimizer': 'Adagrad', # said to work better with ComplEx
-            'optimizer_kwargs': {'lr': 0.001, 'weight_decay': 1e-6},
+            'optimizer_kwargs': {'lr': 0.01},
             'training_kwargs': {'num_epochs': 250, 'batch_size': 512},
-            'negative_sampler':'basic',
-            'negative_sampler_kwargs': dict(num_negs_per_pos=20),
+            'negative_sampler':'uniform',
+            'negative_sampler_kwargs': {'num_negs_per_pos': 20},
             'loss': 'SoftplusLoss',
+            'loss_kwargs': {'reduction': 'mean'}  # Ensure proper reduction
             'stopper': 'early',
             'stopper_kwargs':dict(
                 patience=25,
@@ -890,7 +898,9 @@ def _(fact_triples, learning):
             )
         }
     }
-    return testing, training, training_configs, validation
+    """,
+    name="_"
+)
 
 
 @app.cell(hide_code=True)

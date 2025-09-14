@@ -1,8 +1,9 @@
 import numpy as np
+import pykeen.triples.leakage
 import torch
 from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult
-from pykeen.triples import TriplesFactory
+from pykeen.triples import TriplesFactory, leakage
 
 
 def generate_training_set(fact_triples: list[tuple[str, str, str]]) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
@@ -10,6 +11,13 @@ def generate_training_set(fact_triples: list[tuple[str, str, str]]) -> tuple[Tri
 
     tf = TriplesFactory.from_labeled_triples(triples_array)
     training, validation, testing = tf.split([0.8, 0.1, 0.1], random_state=42)
+
+    # Reduce data leakage between training and testing triples
+    core_training, core_validation, core_testing = leakage.unleak(training, validation, testing, n=0.4)
+
+    training.mapped_triples = core_training.mapped_triples
+    validation.mapped_triples = core_validation.mapped_triples
+    testing.mapped_triples = core_testing.mapped_triples
 
     return training, validation, testing
 
