@@ -13,7 +13,7 @@ def imports():
     import src.components.geo_spatial as geo
     import src.components.presentation as present
     import src.components.learning as learning
-    return geo, graph, learning, mo, pd, present
+    return geo, graph, learning, mo, present
 
 
 @app.cell(hide_code=True)
@@ -913,7 +913,7 @@ def _(mo):
 
 
 @app.cell
-def _(learning, pd, testing, training, training_configs, validation):
+def _(learning, testing, training, training_configs, validation):
     _model = 'RotatE'
     _save_path = f"trained_models/{_model}"
 
@@ -921,15 +921,7 @@ def _(learning, pd, testing, training, training_configs, validation):
     learning.save_training_results(rotate_results, _save_path)
 
     # Display some immediate results to assess the quality of the trained model
-    metrics = rotate_results.metric_results
-    pd.DataFrame({
-        "MRR": [metrics.get_metric("mrr")],
-        "Hits@10": [metrics.get_metric("hits_at_10")],
-        "Hits@5": [metrics.get_metric("hits_at_5")],
-        "Hits@3": [metrics.get_metric("hits_at_3")],
-        "Hits@1": [metrics.get_metric("hits_at_1")],
-        "Mean Rank": [metrics.get_metric("mr")],
-    })
+    learning.summarize_training_metrics(rotate_results.metric_results)
     return
 
 
@@ -948,7 +940,7 @@ def _(mo):
 
 
 @app.cell
-def _(learning, pd, testing, training, training_configs, validation):
+def _(learning, testing, training, training_configs, validation):
     _model = 'ComplEx'
     _save_path = f"trained_models/{_model}"
 
@@ -956,39 +948,42 @@ def _(learning, pd, testing, training, training_configs, validation):
     learning.save_training_results(complex_results)
 
     # Display some immediate results to assess the quality of the trained model
-    metrics = complex_results.metric_results
-    pd.DataFrame({
-        "MRR": [metrics.get_metric("mrr")],
-        "Hits@10": [metrics.get_metric("hits_at_10")],
-        "Hits@5": [metrics.get_metric("hits_at_5")],
-        "Hits@3": [metrics.get_metric("hits_at_3")],
-        "Hits@1": [metrics.get_metric("hits_at_1")],
-        "Mean Rank": [metrics.get_metric("mr")],
-    })
+    learning.summarize_training_metrics(complex_results.metric_results)
     return
 
 
 @app.cell
 def _(learning):
-    model, tf = learning.load_model("trained_models/ComplEx")
-    model, tf
-    return (model,)
+    loaded_model, loaded_tripels = learning.load_model("trained_models/ComplEx")
+    loaded_model, loaded_tripels
+    return
 
 
 @app.cell
-def _(model, pd, results):
-    # Collect metrics into one DataFrame
-    df_results = pd.DataFrame({
-        model: results[model].metric_results.to_flat_dict()
-        for model in results
-    }).T  # transpose: models as rows
+def _(mo):
+    mo.md(
+        r"""
+    ## Link Prediction
 
-    d = f"""
-    **MRR:** {df_results.loc[model, 'mrr']:.3f}  
-    **Hits@1:** {df_results.loc[model, 'hits@1']:.3f}  
-    **Hits@3:** {df_results.loc[model, 'hits@3']:.3f}  
-    **Hits@10:** {df_results.loc[model, 'hits@10']:.3f}  
+    With our KG embedding models trained, we can now utilize them to generate predictions about missing links in the public transport network. This is done by prompting the trained model with incomplete triples, i.e., triples $(h, r, t)$ where exactly one of the three components is left blank. The model will then fill this gap with various entities and assess their likelyhood. We take the guessed triples with the highest probability to retrieve the most reasonable predictions, according to the model. 
     """
+    )
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    # Collect metrics into one DataFrame
+    #df_results = pd.DataFrame({
+    #    model: results[model].metric_results.to_flat_dict()
+    #    for model in results
+    #}).T  # transpose: models as rows
+
     return
 
 

@@ -1,8 +1,13 @@
 import json
+from typing import Sequence
+
 import numpy as np
+import pandas as pd
 import torch
+from pykeen.evaluation import MetricResults
 from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult
+from pykeen.predict import predict_triples
 from pykeen.triples import TriplesFactory, leakage
 
 
@@ -71,9 +76,22 @@ def load_model(model_dir_path: str) -> tuple[Model, TriplesFactory]:
     return model, tf
 
 
-def load_training_results(model_dir_path: str):
-    # Load the results from the generated results.json file
-    with open(f"{model_dir_path}/results.json", "r") as f:
-        results = json.load(f)
+def load_training_results(model_dir_path: str) -> pd.DataFrame:
+    return pd.read_csv(f"{model_dir_path}/metrics.csv")
 
-    return results
+
+def summarize_training_metrics(metrics: MetricResults) -> pd.DataFrame:
+    return pd.DataFrame({
+        "MRR": [metrics.get_metric("mrr")],
+        "Hits@10": [metrics.get_metric("hits_at_10")],
+        "Hits@5": [metrics.get_metric("hits_at_5")],
+        "Hits@3": [metrics.get_metric("hits_at_3")],
+        "Hits@1": [metrics.get_metric("hits_at_1")],
+        "Mean Rank": [metrics.get_metric("mr")],
+    })
+
+
+def score_triples(embedding_model: Model, triples_factory: TriplesFactory, triples: Sequence[tuple[str, str, str]]) -> pd.DataFrame:
+    score_pack = predict_triples(model=embedding_model, triples=triples)
+    scores_df = score_pack.process(factory=triples_factory).df
+    return scores_df.nlargest(n=5, columns="score")
