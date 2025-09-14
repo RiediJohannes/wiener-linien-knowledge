@@ -21,6 +21,7 @@ def generate_training_set(fact_triples: list[tuple[str, str, str]]) -> tuple[Tri
 
     return training, validation, testing
 
+
 def train_model(training: TriplesFactory, validation: TriplesFactory, testing: TriplesFactory, model_configuration: dict, seed = 42) -> PipelineResult:
     # Use all available CPU cores
     torch.set_num_threads(torch.get_num_threads())
@@ -39,13 +40,19 @@ def train_model(training: TriplesFactory, validation: TriplesFactory, testing: T
     print(f"Completed training for model {model_name}")
     return results
 
+
 def save_training_results(results: PipelineResult, model_dir_path: str) -> None:
     """
     Save the final model as well as training metrics and training triples
     :param results:
     :param model_dir_path:
     """
+
     results.save_to_directory(model_dir_path)
+
+    results_dataframe = results.metric_results.to_df()
+    results_dataframe.to_csv(f'{model_dir_path}/metrics.csv', index=False)
+
 
 def load_model(model_dir_path: str) -> tuple[Model, TriplesFactory]:
     model = torch.load(
@@ -63,32 +70,10 @@ def load_model(model_dir_path: str) -> tuple[Model, TriplesFactory]:
 
     return model, tf
 
+
 def load_training_results(model_dir_path: str):
     # Load the results from the generated results.json file
     with open(f"{model_dir_path}/results.json", "r") as f:
         results = json.load(f)
 
     return results
-
-def load_pipeline_result(model_dir_path: str) -> PipelineResult:
-    model, training_triples = load_model(model_dir_path)
-
-    # Load and parse the results.json file
-    with open(f"{model_dir_path}/results.json", "r") as f:
-        json_data = json.load(f)
-
-    metric_results = json_data.get("metric_results", {})
-
-    # Construct the PipelineResult
-    pipeline_result = PipelineResult(
-        model=model,
-        training=training_triples,
-        losses=json_data.get("losses", []),
-        metric_results=metric_results,
-    )
-
-    return pipeline_result
-
-# Usage
-result = load_pipeline_result("path/to/your/model_directory")
-print(result)

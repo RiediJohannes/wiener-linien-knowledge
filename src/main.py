@@ -7,12 +7,13 @@ app = marimo.App(width="medium", app_title="", css_file="styles/notebook.css")
 @app.cell(hide_code=True)
 def imports():
     import marimo as mo
+    import pandas as pd
 
     import src.components.graph as graph
     import src.components.geo_spatial as geo
     import src.components.presentation as present
     import src.components.learning as learning
-    return geo, graph, learning, mo, present
+    return geo, graph, learning, mo, pd, present
 
 
 @app.cell(hide_code=True)
@@ -905,21 +906,30 @@ def _(mo):
 
     The following code starts the training of the first graph embedding model, namely RotatE. Upon completion, the trained model is saved to the file system at `./trained_models/RotatE/`.
 
-    **WARNING: This is a long-running task!** Depending on your hardware, this might take between 5-60 minutes. 
+    **WARNING: This is a long-running task!** Depending on your hardware, this might take between 5-60 minutes.
     """
     )
     return
 
 
 @app.cell
-def _(learning, testing, training, training_configs, validation):
+def _(learning, pd, testing, training, training_configs, validation):
     _model = 'RotatE'
     _save_path = f"trained_models/{_model}"
 
     rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
-    learning.save_training_results(rotate_results)
+    learning.save_training_results(rotate_results, _save_path)
 
-    rotate_results.metric_results.to_df()
+    # Display some immediate results to assess the quality of the trained model
+    metrics = rotate_results.metric_results
+    pd.DataFrame({
+        "MRR": [metrics.get_metric("mrr")],
+        "Hits@10": [metrics.get_metric("hits_at_10")],
+        "Hits@5": [metrics.get_metric("hits_at_5")],
+        "Hits@3": [metrics.get_metric("hits_at_3")],
+        "Hits@1": [metrics.get_metric("hits_at_1")],
+        "Mean Rank": [metrics.get_metric("mr")],
+    })
     return
 
 
@@ -930,7 +940,7 @@ def _(mo):
     ### Model 2: ComplEx
 
     The next code block starts the training of the second graph embedding model: ComplEx. Upon completion, the trained model is saved to the file system at `./trained_models/ComplEx/`.
- 
+
     Again, this will take a long time, so be sure to consider that before running.
     """
     )
@@ -938,14 +948,23 @@ def _(mo):
 
 
 @app.cell
-def _(learning, testing, training, training_configs, validation):
+def _(learning, pd, testing, training, training_configs, validation):
     _model = 'ComplEx'
     _save_path = f"trained_models/{_model}"
 
     complex_results = learning.train_model(training, validation, testing, training_configs[_model])
     learning.save_training_results(complex_results)
 
-    complex_results.metric_results.to_df()
+    # Display some immediate results to assess the quality of the trained model
+    metrics = complex_results.metric_results
+    pd.DataFrame({
+        "MRR": [metrics.get_metric("mrr")],
+        "Hits@10": [metrics.get_metric("hits_at_10")],
+        "Hits@5": [metrics.get_metric("hits_at_5")],
+        "Hits@3": [metrics.get_metric("hits_at_3")],
+        "Hits@1": [metrics.get_metric("hits_at_1")],
+        "Mean Rank": [metrics.get_metric("mr")],
+    })
     return
 
 
@@ -953,45 +972,23 @@ def _(learning, testing, training, training_configs, validation):
 def _(learning):
     model, tf = learning.load_model("trained_models/ComplEx")
     model, tf
-    return
+    return (model,)
 
 
 @app.cell
-def _(pd, results, ui):
-    #training_results[_model] = {
-    #    'hits_at_10': result.metric_results.get_metric('hits@10'),
-    #    'mrr': result.metric_results.get_metric('mean_reciprocal_rank'),
-    #    'training_time': result.training_time,
-    #}
-
-    #print(f"{model_name} Results:")
-    #print(f"  Hits@10: {results[model_name]['hits_at_10']:.3f}")
-    #print(f"  MRR: {results[model_name]['mrr']:.3f}")
-    #print(f"  Time: {results[model_name]['training_time']:.1f}s\n")
-
-    #result['RotatE'].metric_results.to_df(by='relation')
-
+def _(model, pd, results):
     # Collect metrics into one DataFrame
     df_results = pd.DataFrame({
         model: results[model].metric_results.to_flat_dict()
         for model in results
     }).T  # transpose: models as rows
 
-
-    cards = [
-        ui.card(
-            header=model,
-            content=f"""
-            **MRR:** {df_results.loc[model, 'mrr']:.3f}  
-            **Hits@1:** {df_results.loc[model, 'hits@1']:.3f}  
-            **Hits@3:** {df_results.loc[model, 'hits@3']:.3f}  
-            **Hits@10:** {df_results.loc[model, 'hits@10']:.3f}  
-            """
-        )
-        for model in df_results.index
-    ]
-
-    ui.row(cards)   # put cards next to each other
+    d = f"""
+    **MRR:** {df_results.loc[model, 'mrr']:.3f}  
+    **Hits@1:** {df_results.loc[model, 'hits@1']:.3f}  
+    **Hits@3:** {df_results.loc[model, 'hits@3']:.3f}  
+    **Hits@10:** {df_results.loc[model, 'hits@10']:.3f}  
+    """
     return
 
 
