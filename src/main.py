@@ -54,7 +54,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def merging_nearby_stops(geo, graph):
     _stops = graph.get_stops()
     print(f"Queried {len(_stops)} stops from the graph")
@@ -375,7 +375,7 @@ def _(geo, graph):
         MERGE (left)-[:NEIGHBOURS]->(right)
     """
 
-    print("Creating ':NEIGHBOURS' relationships...")
+    print("Adding ':NEIGHBOURS' relationships to districts...")
     _summary = graph.execute_operation(_operation, neighbours_dict=_neighbours)
     print(f"Created {_summary.counters.relationships_created} relationships")
     return
@@ -383,29 +383,35 @@ def _(geo, graph):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
+    operation_calculate_population_density = """
+    MATCH (d:SubDistrict)
+    SET d.density = 1_000_000 * d.population / d.area;
+    """
+
+    mo.md(fr"""
     ### Pre-calculate population density of all subdistricts
 
     Since a subdistrict's area is given in m², we multiply the population count by one million to get the population density in people/km².
 
     ```cypher
-    MATCH (d:SubDistrict)
-    SET d.density = 1_000_000 * d.population / d.area;
+    {operation_calculate_population_density}
     ```
     """
     )
+    return (operation_calculate_population_density,)
+
+
+@app.cell
+def _(graph, operation_calculate_population_density):
+    print("Calculating population density of each subdistrict...")
+    _summary = graph.execute_operation(operation_calculate_population_density)
+    print(f"(Re)set {_summary.counters.properties_set} properties")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-    ### Adding Labels
-
-    Classify exceptions to the regularly scheduled service into additional and removed service
-    ```cypher
+    operation_classify_service_exceptions = """
     MATCH (ex:ServiceException)
     WHERE ex.exception_type = 1
     SET ex: AddedService;
@@ -413,57 +419,120 @@ def _(mo):
     MATCH (ex:ServiceException)
     WHERE ex.exception_type = 2
     SET ex: RemovedService;
-    ```
+    """
 
-    Label trips according to their mode of transport:
-    ```cypher
+    operation_classify_trips = """
     MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
     WHERE r.type = 0  // enum value for trams or light rail
-    SET t: TramTrip
+    SET t: TramTrip;
 
     MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
     WHERE r.type = 1  // enum value for subways
-    SET t: SubwayTrip
+    SET t: SubwayTrip;
 
-    MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
-    WHERE r.type = 2  // enum value for trains (heavy rail)
-    SET t: TrainTrip
+    // Note: r.type = 2 would be for trains but our dataset does not include S-Bahn trips,
+    // as they are operated by ÖBB instead of Wiener Linien.
 
     MATCH (t:Trip)-[:PART_OF_ROUTE]->(r:Route)
     WHERE r.type = 3  // enum value for buses
-    SET t: BusTrip
-    ```
+    SET t: BusTrip;
+    """
 
-    ### Classify stops
-
-    Adding these labels is mostly done for easier retrieval of certain stops later.
-
-    **Bus stops:**
-    ```cypher
+    operation_classify_stops = """
+    // Bus stops
     MATCH (s:Stop)<-[:STOPS_AT]-(:BusTrip)
     WHERE NOT (s:BusStop)
-    SET s: BusStop
-    ```
-    **Tram stops:**
-    ```cypher
+    SET s: BusStop;
+
+    // Tram stops
     MATCH (s:Stop)<-[:STOPS_AT]-(:TramTrip)
     WHERE NOT (s:TramStop)
-    SET s: TramStop
-    ```
-    **Subway stops/stations:**
-    ```cypher
+    SET s: TramStop;
+
+    // Subway stops/stations
     MATCH (s:Stop)<-[:STOPS_AT]-(:SubwayTrip)
     WHERE NOT (s:SubwayStation)
-    SET s: SubwayStation
-    ```
-    **Collect all stops that are used by some trip (after redirecting trips to cluster roots)**
-    ```cypher
+    SET s: SubwayStation;
+    """
+
+    operation_collect_in_use_stops = """
     MATCH (s:Stop&(BusStop|TramStop|SubwayStation))
     WHERE NOT (s: InUse)
-    SET s: InUse
+    SET s: InUse;
+    """
+
+    # ----------------------------- markdown ------------------------------
+
+    mo.md(fr"""
+    ### Adding Labels
+
+    Additionally, we add some **new labels to existing entities** based on their properties/relationships for easier retrieval of a certain category of entities later. 
+
+    **Classify exceptions** to the regularly scheduled service into additional and removed service:
+    ```cypher
+    {operation_classify_service_exceptions}
+    ```
+
+    **Label trips** according to their mode of transport:
+    ```cypher
+    {operation_classify_trips}
+    ```
+
+    **Classify stops** according to their usage:
+    ```cypher
+    {operation_classify_stops}
+    ```
+
+    Collect all stops that are _used by some trip_ (now after we have redirected trips to cluster roots)
+    ```cypher
+    {operation_collect_in_use_stops}
     ```
     """
     )
+    return (
+        operation_classify_service_exceptions,
+        operation_classify_stops,
+        operation_classify_trips,
+        operation_collect_in_use_stops,
+    )
+
+
+@app.cell
+def _(
+    graph,
+    operation_classify_service_exceptions,
+    operation_classify_stops,
+    operation_classify_trips,
+    operation_collect_in_use_stops,
+):
+    print("Classifying service exceptions...")
+    _added_exceptions_query, _removed_exceptions_query, _ = operation_classify_service_exceptions.split(";")
+    _summary = graph.execute_operation(_added_exceptions_query)
+    print(f"Added {_summary.counters.labels_added} ':AddedService' labels")
+    _summary = graph.execute_operation(_removed_exceptions_query)
+    print(f"Added {_summary.counters.labels_added} ':RemovedService' labels")
+
+    print("\nClassifying trips according to mode of transport...")
+    _bus_trips_query, _tram_trips_query, _subway_trips_query, _ = operation_classify_trips.split(";")
+    _summary = graph.execute_operation(_bus_trips_query)
+    print(f"Added {_summary.counters.labels_added} ':BusTrip' labels")
+    _summary = graph.execute_operation(_tram_trips_query)
+    print(f"Added {_summary.counters.labels_added} ':TramTrip' labels")
+    _summary = graph.execute_operation(_subway_trips_query)
+    print(f"Added {_summary.counters.labels_added} ':SubwayTrip' labels")
+
+    print("\nClassifying stops according to their transit connections...")
+    _bus_stop_query, _tram_stop_query, _subway_station_query, _ = operation_classify_stops.split(";")
+    _summary = graph.execute_operation(_bus_stop_query)
+    print(f"Added {_summary.counters.labels_added} ':BusStop' labels")
+    _summary = graph.execute_operation(_tram_stop_query)
+    print(f"Added {_summary.counters.labels_added} ':TramStop' labels")
+    _summary = graph.execute_operation(_subway_station_query)
+    print(f"Added {_summary.counters.labels_added} ':SubwayStation' labels")
+
+    print("\nMarking stops that are actually in use...")
+    _summary = graph.execute_operation(operation_collect_in_use_stops)
+    print(f"Added {_summary.counters.labels_added} ':InUse' labels")
     return
 
 
@@ -558,7 +627,8 @@ def calculate_trips_per_year(graph, operation_calculate_frequency_of_trips):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""
+    mo.md(
+        r"""
     Next, we find every pair of stops $(s1, s2)$ such that some trip $t$ directly connects $s1$ to $s2$ (in that order). We aggregate over all such trips $t$ and sum their operations per year to get the total number of direct connections $s1 \to s2$ in a year.  
     Note that such trips do not necessarily move between the exact stops $s1$ and $s2$ but between two stops within their (separate) clusters, as we have previously moved all `:STOPS_AT` relationships to a cluster's root node.
 
