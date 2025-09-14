@@ -100,7 +100,7 @@ def get_subdistricts() -> list[SubDistrict]:
         record["shape"]
     ) for record in results]
 
-def get_stops(*, id_list: list[str] = None) -> list[Stop] | None:
+def get_stops(*, with_clusters = False, id_list: list[str] = None) -> list[Stop] | None:
     where_clause = f"WHERE s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else ""
 
     base_query = f"""
@@ -108,7 +108,7 @@ def get_stops(*, id_list: list[str] = None) -> list[Stop] | None:
     {where_clause}
     """
 
-    query = _finalize_stop_query(base_query, "s")
+    query = _finalize_stop_query(base_query, "s", with_clusters)
     response = execute_query(query)
     return _parse_stops_from_response(response)
 
@@ -316,19 +316,31 @@ def _parse_stops_from_response(response: list[Record]) -> list[Stop]:
 
     return stops
 
-def _finalize_stop_query(base_query: str, stop_variable: str) -> str:
-    return f"""
-    {base_query}
-    WITH {stop_variable}
-    OPTIONAL MATCH ({stop_variable})<-[:IN_CLUSTER]-(child:Stop)
-    WITH {stop_variable}, collect([child.lat, child.lon]) as cluster_points
-    RETURN DISTINCT
-        {stop_variable}.id as id,
-        {stop_variable}.lat as lat,
-        {stop_variable}.lon as lon,
-        {stop_variable}.name as name,
-        apoc.label.exists({stop_variable}, "ClusterStop") as is_cluster,
-        {stop_variable}.cluster_lat as cluster_lat,
-        {stop_variable}.cluster_lon as cluster_lon,
-        cluster_points;
-    """
+def _finalize_stop_query(base_query: str, stop_variable: str, with_clusters = False) -> str:
+    if with_clusters:
+        return f"""
+        {base_query}
+        WITH {stop_variable}
+        OPTIONAL MATCH ({stop_variable})<-[:IN_CLUSTER]-(child:Stop)
+        WITH {stop_variable}, collect([child.lat, child.lon]) as cluster_points
+        RETURN DISTINCT
+            {stop_variable}.id as id,
+            {stop_variable}.lat as lat,
+            {stop_variable}.lon as lon,
+            {stop_variable}.name as name,
+            apoc.label.exists({stop_variable}, "ClusterStop") as is_cluster,
+            {stop_variable}.cluster_lat as cluster_lat,
+            {stop_variable}.cluster_lon as cluster_lon,
+            cluster_points;
+        """
+    else:
+        return f"""
+        {base_query}
+        WITH {stop_variable}
+        RETURN DISTINCT
+            {stop_variable}.id as id,
+            {stop_variable}.lat as lat,
+            {stop_variable}.lon as lon,
+            {stop_variable}.name as name,
+            False as is_cluster;
+        """

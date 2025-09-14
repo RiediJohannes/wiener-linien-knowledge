@@ -902,25 +902,12 @@ def _(mo):
 @app.cell
 def _(learning, testing, training, training_configs, validation):
     _model = 'RotatE'
-    _save_path = "trained_models/rotate"
+    _save_path = f"trained_models/{_model}"
 
     rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
     rotate_results.save_to_directory(_save_path)
 
     rotate_results
-    return
-
-
-@app.cell
-def _(training_results):
-    training_results['RotatE'].save_to_directory("trained_models/complex")
-    return
-
-
-@app.cell
-def _(learning):
-    model, tf = learning.load_model("trained_models/rotate")
-    model, tf
     return
 
 
@@ -933,12 +920,19 @@ def _(mo):
 @app.cell
 def _(learning, testing, training, training_configs, validation):
     _model = 'ComplEx'
-    _save_path = "trained_models/complex"
+    _save_path = f"trained_models/{_model}"
 
     complex_results = learning.train_model(training, validation, testing, training_configs[_model])
     complex_results.save_to_directory(_save_path)
 
     complex_results
+    return
+
+
+@app.cell
+def _(learning):
+    model, tf = learning.load_model("trained_models/rotate")
+    model, tf
     return
 
 
@@ -983,9 +977,9 @@ def _(pd, results, ui):
 
 @app.cell
 def _(graph, mo, present):
-    #_stops = graph.get_stops() #id_list=["at:49:1418:0:4", "at:49:466:0:1"]
+    _stops = graph.get_stops(with_clusters=True) #id_list=["at:49:1418:0:4", "at:49:466:0:1"]
     #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
-    _stops = graph.get_stops_for_subdistrict(11, 2)
+    #_stops = graph.get_stops_for_subdistrict(11, 2)
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
     # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
