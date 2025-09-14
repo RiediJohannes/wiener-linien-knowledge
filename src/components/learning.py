@@ -1,5 +1,4 @@
 import numpy as np
-import pykeen.triples.leakage
 import torch
 from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult

@@ -854,8 +854,9 @@ def _(fact_triples, learning):
             'loss_kwargs': {'margin': 1.0},
             'stopper': 'early',
             'stopper_kwargs':dict(
-                patience=25,
-                frequency=15,
+                patience=30,  # Stop if loss value doesn't improve for 20 epochs
+                frequency=15, # Check every 10 epochs
+                delta=0.001   # Minimum improvement threshold
             )
         },
 
@@ -863,14 +864,15 @@ def _(fact_triples, learning):
             'model': 'RotatE', 
             'model_kwargs': {'embedding_dim': 256},
             'optimizer_kwargs': {'lr': 0.0005},
-            'training_kwargs': {'num_epochs': 500, 'batch_size': 256},
+            'training_kwargs': {'num_epochs': 600, 'batch_size': 256},
             'loss': 'SoftplusLoss',
             'negative_sampler': 'bernoulli',
             'negative_sampler_kwargs': {'num_negs_per_pos': 3},
             'stopper': 'early',
             'stopper_kwargs':dict(
-                patience=25,
-                frequency=15,
+                patience=30,  # Stop if loss value doesn't improve for 20 epochs
+                frequency=15, # Check every 10 epochs
+                delta=0.001   # Minimum improvement threshold
             )
         },
 
@@ -878,16 +880,17 @@ def _(fact_triples, learning):
             'model': 'ComplEx',
             'model_kwargs': {'embedding_dim': 200},
             'optimizer': 'Adagrad', # said to work better with ComplEx
-            'optimizer_kwargs': {'lr': 0.01},
-            'training_kwargs': {'num_epochs': 500, 'batch_size': 512},
+            'optimizer_kwargs': {'lr': 0.015},
+            'training_kwargs': {'num_epochs': 600, 'batch_size': 512},
             'negative_sampler': 'bernoulli',
             'negative_sampler_kwargs': {'num_negs_per_pos': 3},
             'loss': 'SoftplusLoss',
             'loss_kwargs': {'reduction': 'mean'},  # Ensure proper reduction
             'stopper': 'early',
             'stopper_kwargs':dict(
-                patience=25,
-                frequency=15,
+                patience=30,  # Stop if loss value doesn't improve for 20 epochs
+                frequency=15, # Check every 10 epochs
+                delta=0.001   # Minimum improvement threshold
             )
         }
     }
@@ -896,7 +899,15 @@ def _(fact_triples, learning):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### Model 1: RotatE""")
+    mo.md(
+        r"""
+    ### Model 1: RotatE
+
+    The following code starts the training of the first graph embedding model, namely RotatE. Upon completion, the trained model is saved to the file system at `./trained_models/RotatE/`.
+
+    **WARNING: This is a long-running task!** Depending on your hardware, this might take between 5-60 minutes. 
+    """
+    )
     return
 
 
@@ -914,7 +925,15 @@ def _(learning, testing, training, training_configs, validation):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""### Model 2: ComplEx""")
+    mo.md(
+        r"""
+    ### Model 2: ComplEx
+
+    The next code block starts the training of the second graph embedding model: ComplEx. Upon completion, the trained model is saved to the file system at `./trained_models/ComplEx/`.
+ 
+    Again, this will take a long time, so be sure to consider that before running.
+    """
+    )
     return
 
 
@@ -932,7 +951,7 @@ def _(learning, testing, training, training_configs, validation):
 
 @app.cell
 def _(learning):
-    model, tf = learning.load_model("trained_models/rotate")
+    model, tf = learning.load_model("trained_models/RotatE")
     model, tf
     return
 
