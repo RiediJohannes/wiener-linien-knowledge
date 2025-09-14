@@ -854,9 +854,8 @@ def _(fact_triples, learning):
             'loss_kwargs': {'margin': 1.0},
             'stopper': 'early',
             'stopper_kwargs':dict(
-                patience=30,  # Stop if loss value doesn't improve for 20 epochs
-                frequency=15, # Check every 10 epochs
-                delta=0.001   # Minimum improvement threshold
+                patience=30,  # Stop if loss value doesn't improve for 30 iterations
+                frequency=15 # Check every 10 epochs
             )
         },
 
@@ -864,15 +863,15 @@ def _(fact_triples, learning):
             'model': 'RotatE', 
             'model_kwargs': {'embedding_dim': 256},
             'optimizer_kwargs': {'lr': 0.0005},
-            'training_kwargs': {'num_epochs': 600, 'batch_size': 256},
-            'loss': 'SoftplusLoss',
+            'training_kwargs': {'num_epochs': 450, 'batch_size': 512},
+            'loss': 'MarginRankingLoss',
+            'loss_kwargs': {'margin': 6.0},
             'negative_sampler': 'bernoulli',
             'negative_sampler_kwargs': {'num_negs_per_pos': 3},
             'stopper': 'early',
             'stopper_kwargs':dict(
-                patience=30,  # Stop if loss value doesn't improve for 20 epochs
-                frequency=15, # Check every 10 epochs
-                delta=0.001   # Minimum improvement threshold
+                patience=30,  # Stop if loss value doesn't improve for 30 iterations
+                frequency=15 # Check every 10 epochs
             )
         },
 
@@ -882,15 +881,16 @@ def _(fact_triples, learning):
             'optimizer': 'Adagrad', # said to work better with ComplEx
             'optimizer_kwargs': {'lr': 0.015},
             'training_kwargs': {'num_epochs': 600, 'batch_size': 512},
+            'regularizer': 'LpRegularizer',
+            'regularizer_kwargs': {'weight': 1e-6},
             'negative_sampler': 'bernoulli',
             'negative_sampler_kwargs': {'num_negs_per_pos': 3},
             'loss': 'SoftplusLoss',
             'loss_kwargs': {'reduction': 'mean'},  # Ensure proper reduction
             'stopper': 'early',
             'stopper_kwargs':dict(
-                patience=30,  # Stop if loss value doesn't improve for 20 epochs
-                frequency=15, # Check every 10 epochs
-                delta=0.001   # Minimum improvement threshold
+                patience=30,  # Stop if loss value doesn't improve for 30 iterations
+                frequency=15 # Check every 10 epochs
             )
         }
     }
