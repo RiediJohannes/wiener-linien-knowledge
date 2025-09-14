@@ -1,3 +1,4 @@
+import json
 import numpy as np
 import torch
 from pykeen.models import Model
@@ -38,8 +39,20 @@ def train_model(training: TriplesFactory, validation: TriplesFactory, testing: T
     print(f"Completed training for model {model_name}")
     return results
 
+def save_training_results(results: PipelineResult, model_dir_path: str) -> None:
+    """
+    Save the final model as well as training metrics and training triples
+    :param results:
+    :param model_dir_path:
+    """
+    results.save_to_directory(model_dir_path)
+
 def load_model(model_dir_path: str) -> tuple[Model, TriplesFactory]:
-    model = torch.load(model_dir_path + "/trained_model.pkl", weights_only=False)
+    model = torch.load(
+        model_dir_path + "/trained_model.pkl",
+        map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
+        weights_only=False
+    )
 
     # Triples factory (for ID→label mapping)
     tf = TriplesFactory.from_path(
@@ -49,3 +62,33 @@ def load_model(model_dir_path: str) -> tuple[Model, TriplesFactory]:
     )
 
     return model, tf
+
+def load_training_results(model_dir_path: str):
+    # Load the results from the generated results.json file
+    with open(f"{model_dir_path}/results.json", "r") as f:
+        results = json.load(f)
+
+    return results
+
+def load_pipeline_result(model_dir_path: str) -> PipelineResult:
+    model, training_triples = load_model(model_dir_path)
+
+    # Load and parse the results.json file
+    with open(f"{model_dir_path}/results.json", "r") as f:
+        json_data = json.load(f)
+
+    metric_results = json_data.get("metric_results", {})
+
+    # Construct the PipelineResult
+    pipeline_result = PipelineResult(
+        model=model,
+        training=training_triples,
+        losses=json_data.get("losses", []),
+        metric_results=metric_results,
+    )
+
+    return pipeline_result
+
+# Usage
+result = load_pipeline_result("path/to/your/model_directory")
+print(result)

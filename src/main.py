@@ -917,9 +917,9 @@ def _(learning, testing, training, training_configs, validation):
     _save_path = f"trained_models/{_model}"
 
     rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
-    rotate_results.save_to_directory(_save_path)
+    learning.save_training_results(rotate_results)
 
-    rotate_results
+    rotate_results.metric_results.to_df()
     return
 
 
@@ -943,15 +943,15 @@ def _(learning, testing, training, training_configs, validation):
     _save_path = f"trained_models/{_model}"
 
     complex_results = learning.train_model(training, validation, testing, training_configs[_model])
-    complex_results.save_to_directory(_save_path)
+    learning.save_training_results(complex_results)
 
-    complex_results
+    complex_results.metric_results.to_df()
     return
 
 
 @app.cell
 def _(learning):
-    model, tf = learning.load_model("trained_models/RotatE")
+    model, tf = learning.load_model("trained_models/ComplEx")
     model, tf
     return
 
