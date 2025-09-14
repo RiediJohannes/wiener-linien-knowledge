@@ -821,7 +821,7 @@ def _(mo):
 @app.cell
 def _(graph, triples_queries):
     fact_triples = graph.query_triples(triples_queries)
-    return (fact_triples,)
+    return
 
 
 @app.cell(hide_code=True)
@@ -833,13 +833,6 @@ def _(mo):
     Next comes the setup for model training. We will train two models using different KG embedding algorithms and comparatively analyze their results.
     """
     )
-    return
-
-
-@app.cell
-def _(fact_triples, learning):
-    d = learning.generate_training_set(fact_triples)
-    d
     return
 
 
@@ -869,10 +862,10 @@ app._unparsable_cell(
         'RotatE': {
             'model': 'RotatE', 
             'model_kwargs': {'embedding_dim': 256},
-            'optimizer_kwargs': {'lr': 0.0005, 'weight_decay': 1e-6},
-            'training_kwargs': {'num_epochs': 300, 'batch_size': 256},
+            'optimizer_kwargs': {'lr': 0.0005},
+            'training_kwargs': {'num_epochs': 500, 'batch_size': 256},
             'loss': 'SoftplusLoss',
-            'negative_sampler':'basic',
+            'negative_sampler': 'uniform',
             'negative_sampler_kwargs': dict(num_negs_per_pos=20),
             'stopper': 'early',
             'stopper_kwargs':dict(
@@ -886,8 +879,8 @@ app._unparsable_cell(
             'model_kwargs': {'embedding_dim': 200},
             'optimizer': 'Adagrad', # said to work better with ComplEx
             'optimizer_kwargs': {'lr': 0.01},
-            'training_kwargs': {'num_epochs': 250, 'batch_size': 512},
-            'negative_sampler':'uniform',
+            'training_kwargs': {'num_epochs': 500, 'batch_size': 512},
+            'negative_sampler': 'uniform',
             'negative_sampler_kwargs': {'num_negs_per_pos': 20},
             'loss': 'SoftplusLoss',
             'loss_kwargs': {'reduction': 'mean'}  # Ensure proper reduction
