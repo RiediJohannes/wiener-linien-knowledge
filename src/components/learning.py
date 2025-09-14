@@ -7,7 +7,7 @@ import torch
 from pykeen.evaluation import MetricResults
 from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult
-from pykeen.predict import predict_triples
+from pykeen.predict import predict_triples, predict_target
 from pykeen.triples import TriplesFactory, leakage
 
 
@@ -91,7 +91,19 @@ def summarize_training_metrics(metrics: MetricResults) -> pd.DataFrame:
     })
 
 
-def score_triples(embedding_model: Model, triples_factory: TriplesFactory, triples: Sequence[tuple[str, str, str]]) -> pd.DataFrame:
-    score_pack = predict_triples(model=embedding_model, triples=triples)
-    scores_df = score_pack.process(factory=triples_factory).df
-    return scores_df.nlargest(n=5, columns="score")
+def score_triples(embedding_model: Model, training_triples: TriplesFactory, triples: Sequence[tuple[str, str, str]]) -> pd.DataFrame:
+    score_pack = predict_triples(model=embedding_model, triples_factory=training_triples, triples=triples)
+    score_dataframe = score_pack.process(factory=training_triples).df
+    return score_dataframe.sort_values(by=['score'], ascending=False)
+
+
+def predict_tail(embedding_model: Model, training_triples: TriplesFactory, head: str, relation: str) -> pd.DataFrame:
+    prediction = predict_target(
+        model=embedding_model,
+        head=head,
+        relation=relation,
+        triples_factory=training_triples,
+    )
+
+    prediction.filter_triples(training_triples.mapped_triples)
+    return prediction.df.sort_values(by=['score'], ascending=False)
