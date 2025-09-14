@@ -821,7 +821,7 @@ def _(mo):
 @app.cell
 def _(graph, triples_queries):
     fact_triples = graph.query_triples(triples_queries)
-    return
+    return (fact_triples,)
 
 
 @app.cell(hide_code=True)
@@ -836,8 +836,8 @@ def _(mo):
     return
 
 
-app._unparsable_cell(
-    r"""
+@app.cell
+def _(fact_triples, learning):
     # Index the entities/relations in the triples and split them into training, validation and testing data 
     training, validation, testing = learning.generate_training_set(fact_triples)
 
@@ -848,8 +848,8 @@ app._unparsable_cell(
             'model_kwargs': {'embedding_dim': 128, 'scoring_fct_norm': 1}, # L1 norm said to work better with TransE
             'optimizer_kwargs': {'lr': 0.001},
             'training_kwargs': {'num_epochs': 200, 'batch_size': 256},
-            'negative_sampler':'basic',
-            'negative_sampler_kwargs': dict(num_negs_per_pos=20),
+            'negative_sampler': 'bernoulli',
+            'negative_sampler_kwargs': {'num_negs_per_pos': 3},
             'loss': 'MarginRankingLoss',
             'loss_kwargs': {'margin': 1.0},
             'stopper': 'early',
@@ -865,8 +865,8 @@ app._unparsable_cell(
             'optimizer_kwargs': {'lr': 0.0005},
             'training_kwargs': {'num_epochs': 500, 'batch_size': 256},
             'loss': 'SoftplusLoss',
-            'negative_sampler': 'uniform',
-            'negative_sampler_kwargs': dict(num_negs_per_pos=20),
+            'negative_sampler': 'bernoulli',
+            'negative_sampler_kwargs': {'num_negs_per_pos': 3},
             'stopper': 'early',
             'stopper_kwargs':dict(
                 patience=25,
@@ -880,10 +880,10 @@ app._unparsable_cell(
             'optimizer': 'Adagrad', # said to work better with ComplEx
             'optimizer_kwargs': {'lr': 0.01},
             'training_kwargs': {'num_epochs': 500, 'batch_size': 512},
-            'negative_sampler': 'uniform',
-            'negative_sampler_kwargs': {'num_negs_per_pos': 20},
+            'negative_sampler': 'bernoulli',
+            'negative_sampler_kwargs': {'num_negs_per_pos': 3},
             'loss': 'SoftplusLoss',
-            'loss_kwargs': {'reduction': 'mean'}  # Ensure proper reduction
+            'loss_kwargs': {'reduction': 'mean'},  # Ensure proper reduction
             'stopper': 'early',
             'stopper_kwargs':dict(
                 patience=25,
@@ -891,9 +891,7 @@ app._unparsable_cell(
             )
         }
     }
-    """,
-    name="_"
-)
+    return testing, training, training_configs, validation
 
 
 @app.cell(hide_code=True)
