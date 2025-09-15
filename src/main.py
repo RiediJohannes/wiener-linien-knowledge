@@ -13,7 +13,8 @@ def imports():
     import src.components.geo_spatial as geo
     import src.components.presentation as present
     import src.components.learning as learning
-    return geo, graph, learning, mo, present
+    import src.components.prediction as prediction
+    return geo, graph, learning, mo, prediction, present
 
 
 @app.cell(hide_code=True)
@@ -564,7 +565,7 @@ def _(mo):
 
     ### Geographic proximity of stops
 
-    First, we collect all pairs of stops that are within 800 meters of each other and connect them by a symmetric `:IS_CLOSE_TO` relationship. For points that are the root of a cluster, we take the geographic midpoint of that cluster which we calculated earlier.
+    First, we collect all pairs of stops that are within 800 metres of each other and connect them by a symmetric `:IS_CLOSE_TO` relationship. For points that are the root of a cluster, we take the geographic midpoint of that cluster which we calculated earlier.
 
     ```cypher
     {operation_find_related_stops}
@@ -579,6 +580,26 @@ def _(graph, operation_find_related_stops):
     print("Finding pairs of geographically close stops...")
     _summary = graph.execute_operation(operation_find_related_stops)
     print(f"Added {int(_summary.counters.relationships_created / 2)} symmetric :IS_CLOSE_TO relationships")
+    return
+
+
+@app.cell
+def _(mo):
+    operation_find_far_apart_related_stops = """
+    MATCH (s:Stop)-[:BUS_CONNECTS_TO|TRAM_CONNECTS_TO]->(t:Stop)
+    WHERE NOT (s)-[:IS_CLOSE_TO]->(t)
+    MERGE (s)-[:IS_CLOSE_TO]->(t)
+    """
+
+    mo.md(r"""While a distance of 800 metres covers most stop pairs with a direct connection, there are some consecutive stops which are unusually far apart. We still want to consider those to be in reach of each other. Thus, we artificially add a `IS_CLOSE_TO` relationship between such stops.""")
+    return (operation_find_far_apart_related_stops,)
+
+
+@app.cell
+def _(graph, operation_find_far_apart_related_stops):
+    print("Finding pairs of geographically far apart but connected stops...")
+    _summary = graph.execute_operation(operation_find_far_apart_related_stops)
+    print(f"Added {int(_summary.counters.relationships_created)} additional :IS_CLOSE_TO relationships")
     return
 
 
@@ -945,17 +966,10 @@ def _(learning, testing, training, training_configs, validation):
     _save_path = f"trained_models/{_model}"
 
     complex_results = learning.train_model(training, validation, testing, training_configs[_model])
-    learning.save_training_results(complex_results)
+    learning.save_training_results(complex_results, _save_path, validation_triples=validation, testing_triples=testing)
 
     # Display some immediate results to assess the quality of the trained model
     learning.summarize_training_metrics(complex_results.metric_results)
-    return
-
-
-@app.cell
-def _(learning):
-    loaded_model, loaded_tripels = learning.load_model("trained_models/ComplEx")
-    loaded_model, loaded_tripels
     return
 
 
@@ -972,21 +986,22 @@ def _(mo):
 
 
 @app.cell
-def _(learning):
+def _(learning, prediction, testing, validation):
     _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
-    
-    learning.predict_tail(_loaded_model, _loaded_triples, "at:49:1530:0:4", "TRAM_CONNECTS_TO")[["tail_label", "score"]]
+
+    _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
+    _prediction_dataframe = _pred.predict_tail("at:49:1530:0:4", "TRAM_CONNECTS_TO").df.sort_values(by=['score'], ascending=True)
+    _prediction_dataframe["tail_label"].tolist()
     return
 
 
 @app.cell
-def _():
-    # Collect metrics into one DataFrame
-    #df_results = pd.DataFrame({
-    #    model: results[model].metric_results.to_flat_dict()
-    #    for model in results
-    #}).T  # transpose: models as rows
+def _(graph, learning, prediction, testing, validation):
+    _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
+    _stops_with_neighbours = graph.get_nearby_stops()
 
+    _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
+    _pred.predict_new_connections(_stops_with_neighbours)
     return
 
 
