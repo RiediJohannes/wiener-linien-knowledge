@@ -986,12 +986,8 @@ def _(mo):
 
 
 @app.cell
-def _(learning, prediction, testing, validation):
-    _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
-
-    _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
-    _prediction_dataframe = _pred.predict_tail("at:49:1530:0:4", "TRAM_CONNECTS_TO").df.sort_values(by=['score'], ascending=True)
-    _prediction_dataframe["tail_label"].tolist()
+def _(mo):
+    mo.md(r"""Scoring potential bus and tram connections of nearby stops.""")
     return
 
 
@@ -1001,14 +997,34 @@ def _(graph, learning, prediction, testing, validation):
     _stops_with_neighbours = graph.get_nearby_stops()
 
     _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
-    _pred.score_potential_connections(_stops_with_neighbours)
+    #_pred.score_potential_connections(_stops_with_neighbours)
+
+    _pred.predict_connection_frequency(_stops_with_neighbours)
+    return
+
+
+app._unparsable_cell(
+    r"""
+    Scoring potential subway connections between 
+    """,
+    name="_"
+)
+
+
+@app.cell
+def _(learning, prediction, testing, validation):
+    _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
+
+    _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
+    _prediction_dataframe = _pred.predict_component(head="at:49:1530:0:4", rel="TRAM_CONNECTS_TO").sort_values(by=['score'], ascending=True)
+    _prediction_dataframe["tail_label"].tolist()
     return
 
 
 @app.cell
 def _(graph, mo, present):
     #_stops = graph.get_stops(with_clusters=True)
-    _stops = graph.get_stops(id_list=["at:49:194:0:1", "at:49:992:0:2"])
+    _stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
     #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
     #_stops = graph.get_stops_for_subdistrict(11, 2)
 

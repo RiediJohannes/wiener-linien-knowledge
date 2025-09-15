@@ -13,7 +13,7 @@ class PredictionMachine:
         self.training_triples: TriplesFactory = training_triples
         self.other_known_triples: list[Tensor] = [factory.mapped_triples for factory in other_known_triples]
 
-    def score_potential_connections(self, stops_with_targets: list[tuple[str, list[str]]], connection_types: list[str] = None, order_ascending = True) -> pd.DataFrame:
+    def score_potential_connections(self, stops_with_targets: list[tuple[str, list[str]]], *, connection_types: list[str] = None, order_ascending = True) -> pd.DataFrame:
         relations = connection_types if connection_types else ["BUS_CONNECTS_TO", "TRAM_CONNECTS_TO"]
         triples = [
             (start, relation, target)
@@ -24,24 +24,74 @@ class PredictionMachine:
 
         return self.score_triples(triples, order_ascending=order_ascending)
 
-    def score_triples(self, triples: Sequence[tuple[str, str, str]], order_ascending = True) -> pd.DataFrame:
+    def predict_connection_frequency(self, stops_with_targets: list[tuple[str, list[str]]], order_ascending = True):
+        frequency_relations = ["NONSTOP_TO", "VERY_FREQUENTLY_TO", "FREQUENTLY_TO", "REGULARLY_TO", "OCCASIONALLY_TO", "RARELY_TO"]
+        triples = [
+            (start, relation, target)
+            for start, targets in stops_with_targets
+            for target in targets
+            for relation in frequency_relations
+        ]
+
+        scored_df = self.score_triples(triples, order_ascending=order_ascending, apply_filter=False)
+
+        # Keep only the highest-scoring relation for each (start, target) pair
+        filtered_df = (
+            scored_df
+            .sort_values("score", ascending=order_ascending)
+            .groupby(["head_label", "tail_label"], as_index=False)
+            .first()  # Keep the first row (highest score) for each group
+        )
+
+        return filtered_df
+
+        # dfs = [
+        #     self.predict_component(head=start, tail=target, targets=frequency_relations)
+        #     for start, targets in stops_with_targets
+        #     for target in targets
+        # ]
+        #
+        # # Concatenate all DataFrames into one
+        # if dfs:
+        #     result_df = pd.concat(dfs, ignore_index=True)
+        #     return result_df
+        # else:
+        #     return pd.DataFrame()  # Return empty DataFrame if no results
+
+    def score_triples(self, triples: Sequence[tuple[str, str, str]], order_ascending = True, apply_filter = True) -> pd.DataFrame:
         score_pack = predict_triples(
             model=self.model,
             triples_factory=self.training_triples,
             triples=triples
         )
 
-        score_dataframe = score_pack.process(factory=self.training_triples).df
+        score_predictions = score_pack.process(factory=self.training_triples) # Convert ScorePack to Prediction
+        score_dataframe = self.filter_predictions(score_predictions) if apply_filter else score_predictions.df
         return score_dataframe.sort_values(by=['score'], ascending=order_ascending)
 
-    def predict_tail(self, head: str, relation: str, targets: Sequence[str] = None) -> pd.DataFrame:
+    def predict_component(self, *, head: str = None, rel: str = None, tail: str = None, targets: Sequence[str] = None, apply_filter = True) -> pd.DataFrame:
+        # Count how many of head, relation, and tail are not None
+        not_none_count = sum(1 for param in [head, rel, tail] if param is not None)
+
+        if not_none_count != 2:
+            raise ValueError(f"Exactly two of 'head', 'relation', or 'tail' must be set. Got {not_none_count}")
+
         prediction = predict_target(
             model=self.model,
             triples_factory=self.training_triples,
             head=head,
-            relation=relation
+            relation=rel,
+            tail=tail,
+            targets=targets
         )
 
+        return self.filter_predictions(prediction) if apply_filter else prediction.df
+
+    # noinspection PyTypeChecker
+    def filter_predictions(self, triple_predictions: Predictions) -> pd.DataFrame:
+        """
+        Removes predicted triples that are already known to be true since they were part of either the
+        training, validation or testing set.
+        """
         filter_triples = [self.training_triples.mapped_triples] + self.other_known_triples
-        pred_filtered = prediction.filter_triples(*filter_triples)
-        return pred_filtered
+        return triple_predictions.filter_triples(*filter_triples).df
