@@ -145,6 +145,20 @@ def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_st
     return _parse_stops_from_response(response)
 
 
+def get_nearby_stops(*, id_list: list[str] = None) -> list[tuple[str, list[str]]]:
+    where_clause = f"WHERE s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else ""
+
+    query = f"""
+    MATCH (s:Stop:InUse)-[:IS_CLOSE_TO]->(t:Stop:InUse)
+    {where_clause}
+    WITH s, collect(t.id) as potential_targets
+    RETURN s.id as start, potential_targets
+    """
+
+    records = execute_query(query)
+    return [(record["start"], record["potential_targets"]) for record in records]
+
+
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
     if stop_clusters and len(stop_clusters[0]) > 0:
         operation = """
