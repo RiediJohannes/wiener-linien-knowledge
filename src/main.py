@@ -1001,14 +1001,14 @@ def _(graph, learning, prediction, testing, validation):
     _stops_with_neighbours = graph.get_nearby_stops()
 
     _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
-    _pred.predict_new_connections(_stops_with_neighbours)
+    _pred.score_potential_connections(_stops_with_neighbours)
     return
 
 
 @app.cell
 def _(graph, mo, present):
     #_stops = graph.get_stops(with_clusters=True)
-    _stops = graph.get_stops(id_list=["at:49:996:0:3", "at:49:1530:0:4"])
+    _stops = graph.get_stops(id_list=["at:49:194:0:1", "at:49:992:0:2"])
     #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
     #_stops = graph.get_stops_for_subdistrict(11, 2)
 
