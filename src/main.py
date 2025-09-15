@@ -1023,17 +1023,36 @@ def _(learning, prediction, testing, validation):
 
 @app.cell
 def _(graph, mo, present):
-    #_stops = graph.get_stops(with_clusters=True)
-    _stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
+    _stops = graph.get_stops(with_clusters=True)
+    #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
     #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
     #_stops = graph.get_stops_for_subdistrict(11, 2)
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
     # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    transport_map = present.TransportMap(lat=48.2202331, lon=16.3796424, zoom=11)
-    transport_map.add_stops(_stops)
+    _transport_map = present.TransportMap(lat=48.2202331, lon=16.3796424, zoom=11)
+    _transport_map.add_stops(_stops)
 
-    mo.iframe(transport_map.as_html(), height=650)
+    mo.iframe(_transport_map.as_html(), height=650)
+    return
+
+
+@app.cell
+def _(graph, mo, present):
+    _nodes = graph.get_stops(with_clusters=True, only_in_use=True)
+
+    _connections_query = """
+    MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
+    WHERE s.id < t.id AND c.yearly > 4 * 365
+    RETURN DISTINCT s as from, t as to, type(c) as label
+    """
+    _connections = graph.get_connections(_connections_query)
+
+    _transport_map = present.TransportMap(lat=48.2202331, lon=16.3796424, zoom=11)
+    _transport_map.add_transit_nodes(_nodes)
+    _transport_map.add_transit_connections(_connections)
+
+    mo.iframe(_transport_map.as_html(), height=650)
     return
 
 

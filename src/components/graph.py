@@ -1,3 +1,6 @@
+from enum import Enum
+
+import neo4j.graph
 from neo4j import GraphDatabase, ResultSummary, Record
 
 URI = "bolt://localhost:7687"
@@ -14,8 +17,13 @@ class Stop:
         self.lon: float = longitude
         self.name: str = name
 
+    def display_lon(self) -> float:
+        return self.lon
+    def display_lat(self) -> float:
+        return self.lat
+
 class ClusterStop(Stop):
-   def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, cluster_lat: float, cluster_lon: float, cluster_points: list[list[float]]):
+    def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, cluster_lat: float, cluster_lon: float, cluster_points: list[list[float]]):
        super().__init__(stop_id, latitude, longitude, name)
        self.cluster_lat: float = cluster_lat
        self.cluster_lon: float = cluster_lon
@@ -24,12 +32,39 @@ class ClusterStop(Stop):
        else:
            self.cluster_points = []
 
+    def display_lon(self) -> float:
+        return self.cluster_lon
+    def display_lat(self) -> float:
+        return self.cluster_lat
+
 class SubDistrict:
     def __init__(self, district_num: int, subdistrict_num: int, population: int, area: float, shape: str):
         self.id: str = f"{district_num}-{subdistrict_num}"
         self.population: int = population
         self.area: float = area
         self.shape: str = shape
+
+class ModeOfTransport(Enum):
+    BUS = 1
+    TRAM = 2
+    SUBWAY = 3
+    ANY = 0
+
+class Frequency(Enum):
+    NONSTOP_TO = 1
+    VERY_FREQUENTLY_TO = 2
+    FREQUENTLY_TO = 3
+    REGULARLY_TO = 4
+    OCCASIONALLY_TO = 5
+    RARELY_TO = 6
+    UNKNOWN = 0
+
+class Connection:
+    def __init__(self, from_stop: Stop, to_stop: Stop, mode_of_transport: ModeOfTransport = ModeOfTransport.ANY, frequency: Frequency = Frequency.UNKNOWN):
+        self.from_stop: Stop = from_stop
+        self.to_stop: Stop = to_stop
+        self.mode_of_transport: ModeOfTransport = mode_of_transport
+        self.frequency: Frequency = frequency
 
 
 def import_city_data():
@@ -100,11 +135,12 @@ def get_subdistricts() -> list[SubDistrict]:
         record["shape"]
     ) for record in results]
 
-def get_stops(*, with_clusters = False, id_list: list[str] = None) -> list[Stop] | None:
+def get_stops(*, with_clusters = False, only_in_use: bool = False, id_list: list[str] = None) -> list[Stop] | None:
     where_clause = f"WHERE s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else ""
+    in_use_label = f":InUse" if only_in_use else ""
 
     base_query = f"""
-    MATCH (s:Stop)
+    MATCH (s:Stop{in_use_label})
     {where_clause}
     """
 
@@ -157,6 +193,20 @@ def get_nearby_stops(*, id_list: list[str] = None) -> list[tuple[str, list[str]]
 
     records = execute_query(query)
     return [(record["start"], record["potential_targets"]) for record in records]
+
+def get_connections(connection_query: str):
+    query_result = execute_query(connection_query)
+
+    connections = []
+    for record in query_result:
+        from_stop = _parse_stop(record["from"], [])
+        to_stop = _parse_stop(record["to"], [])
+        mode_of_transport = _parse_mode_of_transport(record["label"])
+        frequency = _parse_frequency(record["label"])
+
+        connections.append(Connection(from_stop, to_stop, mode_of_transport, frequency))
+
+    return connections
 
 
 def cluster_stops(stop_clusters: list[list[str]]) -> ResultSummary | None:
@@ -358,3 +408,23 @@ def _finalize_stop_query(base_query: str, stop_variable: str, with_clusters = Fa
             {stop_variable}.name as name,
             False as is_cluster;
         """
+
+def _parse_stop(node: neo4j.graph.Node, cluster_points) -> Stop:
+    if 'ClusterStop' in node.labels:
+        return ClusterStop(node["id"], float(node["lat"]), float(node["lon"]), node["name"],
+                           float(node["cluster_lat"]), float(node["cluster_lon"]), cluster_points)
+    else:
+        return Stop(node["id"], float(node["lat"]), float(node["lon"]), node["name"])
+
+def _parse_mode_of_transport(connection_label: str) -> ModeOfTransport:
+    match connection_label:
+        case "BUS_CONNECTS_TO": return ModeOfTransport.BUS
+        case "TRAM_CONNECTS_TO": return ModeOfTransport.TRAM
+        case "SUBWAY_CONNECTS_TO": return ModeOfTransport.SUBWAY
+        case _: return ModeOfTransport.ANY
+
+def _parse_frequency(frequency_label: str) -> Frequency:
+    if frequency_label in [member.name for member in Frequency]:
+        return Frequency[frequency_label]
+    else:
+        return Frequency.UNKNOWN

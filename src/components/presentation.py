@@ -1,7 +1,7 @@
 import folium
 from shapely import MultiPoint
 
-from src.components.graph import Stop, ClusterStop
+from src.components.graph import Stop, ClusterStop, Connection
 
 
 class TransportMap:
@@ -48,8 +48,8 @@ class TransportMap:
                 fill=True,
                 fill_opacity=0.4,
                 opacity=0.6,
-                popup=stop.name,
-                tooltip=stop.id,
+                tooltip=stop.name,
+                popup=stop.id,
                 pane="stops"
             ).add_to(self.stop_marks)
 
@@ -72,6 +72,39 @@ class TransportMap:
                     pane="clusters",
                     interactive=False
                 ).add_to(self.cluster_marks)
+
+    def add_transit_nodes(self, nodes: list[Stop]) -> None:
+        for node in nodes:
+            folium.CircleMarker(
+                location=[node.display_lat(), node.display_lon()],
+                radius=2,
+                color="black",
+                fill=True,
+                fill_opacity=0.4,
+                opacity=0.6,
+                tooltip=node.name,
+                popup=node.id,
+                pane="stops"
+            ).add_to(self.stop_marks)
+
+    def add_transit_connections(self, connections: list[Connection], include_nodes = False) -> None:
+        for conn in connections:
+            line_coords = [
+                [conn.from_stop.display_lat(), conn.from_stop.display_lon()],
+                [conn.to_stop.display_lat(), conn.to_stop.display_lon()]
+            ]
+
+            # Add the line to the map
+            folium.PolyLine(
+                locations=line_coords,
+                color="blue",
+                weight=2,
+                opacity=0.2,
+                pane="stops"
+            ).add_to(self.stop_marks)
+
+            if include_nodes:
+                self.add_transit_nodes([conn.from_stop, conn.to_stop])
 
     def as_html(self) -> str:
         # Save the map to an HTML file

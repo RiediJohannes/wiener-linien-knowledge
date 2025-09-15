@@ -45,18 +45,6 @@ class PredictionMachine:
 
         return filtered_df
 
-        # dfs = [
-        #     self.predict_component(head=start, tail=target, targets=frequency_relations)
-        #     for start, targets in stops_with_targets
-        #     for target in targets
-        # ]
-        #
-        # # Concatenate all DataFrames into one
-        # if dfs:
-        #     result_df = pd.concat(dfs, ignore_index=True)
-        #     return result_df
-        # else:
-        #     return pd.DataFrame()  # Return empty DataFrame if no results
 
     def score_triples(self, triples: Sequence[tuple[str, str, str]], order_ascending = True, apply_filter = True) -> pd.DataFrame:
         score_pack = predict_triples(
