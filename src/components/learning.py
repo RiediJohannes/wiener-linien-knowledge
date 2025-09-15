@@ -46,15 +46,26 @@ def train_model(training: TriplesFactory, validation: TriplesFactory, testing: T
     return results
 
 
-def save_training_results(results: PipelineResult, model_dir_path: str) -> None:
+def save_training_results(results: PipelineResult, model_dir_path: str,
+                          validation_triples: TriplesFactory = None, testing_triples: TriplesFactory = None) -> None:
     """
-    Save the final model as well as training metrics and training triples
-    :param results:
-    :param model_dir_path:
+    Save the final model as well as training metrics and training triples to the local file system.
+    :param results: The PipelineResults object obtained from the training pipeline.
+    :param model_dir_path: The path to a directory where all output files will be saved to.
+    :param validation_triples: The triples used for validation during training.
+    :param testing_triples: The triples used for testing after training.
     """
 
+    # Export the trained model and its training triples
     results.save_to_directory(model_dir_path)
 
+    # Export validation and testing triples, if there were any
+    if validation_triples:
+        validation_triples.to_path_binary(f"{model_dir_path}/validation_triples")
+    if testing_triples:
+        testing_triples.to_path_binary(f"{model_dir_path}/testing_triples")
+
+    # Export training metrics to a CSV file
     results_dataframe = results.metric_results.to_df()
     results_dataframe.to_csv(f'{model_dir_path}/metrics.csv', index=False)
 
@@ -66,18 +77,18 @@ def load_model(model_dir_path: str) -> tuple[Model, TriplesFactory]:
         weights_only=False
     )
 
-    # Triples factory (for ID→label mapping)
-    tf = TriplesFactory.from_path(
-        path=f"{model_dir_path}/training_triples/numeric_triples.tsv.gz",
-        entity_to_id_path=f"{model_dir_path}/training_triples/entity_to_id.tsv.gz",
-        relation_to_id_path=f"{model_dir_path}/training_triples/relation_to_id.tsv.gz",
-    )
-
-    return model, tf
-
+    # Training triples factory (for ID→label mapping)
+    training_triples = TriplesFactory.from_path_binary(path=f"{model_dir_path}/training_triples")
+    return model, training_triples
 
 def load_training_results(model_dir_path: str) -> pd.DataFrame:
     return pd.read_csv(f"{model_dir_path}/metrics.csv")
+
+def load_triples(model_dir_path: str) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
+    training = TriplesFactory.from_path_binary(path=f"{model_dir_path}/training_triples")
+    validation = TriplesFactory.from_path_binary(path=f"{model_dir_path}/validation_triples")
+    testing = TriplesFactory.from_path_binary(path=f"{model_dir_path}/testing_triples")
+    return training, validation, testing
 
 
 def summarize_training_metrics(metrics: MetricResults) -> pd.DataFrame:
@@ -94,16 +105,15 @@ def summarize_training_metrics(metrics: MetricResults) -> pd.DataFrame:
 def score_triples(embedding_model: Model, training_triples: TriplesFactory, triples: Sequence[tuple[str, str, str]]) -> pd.DataFrame:
     score_pack = predict_triples(model=embedding_model, triples_factory=training_triples, triples=triples)
     score_dataframe = score_pack.process(factory=training_triples).df
-    return score_dataframe.sort_values(by=['score'], ascending=False)
-
+    return score_dataframe.sort_values(by=['score'], ascending=True)
 
 def predict_tail(embedding_model: Model, training_triples: TriplesFactory, head: str, relation: str) -> pd.DataFrame:
     prediction = predict_target(
         model=embedding_model,
-        head=head,
-        relation=relation,
         triples_factory=training_triples,
+        head=head,
+        relation=relation
     )
 
     prediction.filter_triples(training_triples.mapped_triples)
-    return prediction.df.sort_values(by=['score'], ascending=False)
+    return prediction.df.sort_values(by=['score'], ascending=True)

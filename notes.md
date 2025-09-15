@@ -60,7 +60,10 @@ They were particularly fond of:
 - 13.9.
   - 19:30-20:00
 - 14.9.
-  - 12:15-
+  - 12:15-19:30
+- 15.9.
+  - 13:00- 
+
 
 ## Submission
 

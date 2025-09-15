@@ -863,7 +863,7 @@ def _(fact_triples, learning):
         'RotatE': {
             'model': 'RotatE', 
             'model_kwargs': {'embedding_dim': 256},
-            'optimizer_kwargs': {'lr': 0.0005},
+            'optimizer_kwargs': {'lr': 0.0004},
             'training_kwargs': {'num_epochs': 450, 'batch_size': 512},
             'loss': 'MarginRankingLoss',
             'loss_kwargs': {'margin': 6.0},
@@ -918,7 +918,7 @@ def _(learning, testing, training, training_configs, validation):
     _save_path = f"trained_models/{_model}"
 
     rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
-    learning.save_training_results(rotate_results, _save_path)
+    learning.save_training_results(rotate_results, _save_path, validation_triples=validation, testing_triples=testing)
 
     # Display some immediate results to assess the quality of the trained model
     learning.summarize_training_metrics(rotate_results.metric_results)
@@ -972,7 +972,10 @@ def _(mo):
 
 
 @app.cell
-def _():
+def _(learning):
+    _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
+    
+    learning.predict_tail(_loaded_model, _loaded_triples, "at:49:1530:0:4", "TRAM_CONNECTS_TO")[["tail_label", "score"]]
     return
 
 
@@ -989,7 +992,8 @@ def _():
 
 @app.cell
 def _(graph, mo, present):
-    _stops = graph.get_stops(with_clusters=True) #id_list=["at:49:1418:0:4", "at:49:466:0:1"]
+    #_stops = graph.get_stops(with_clusters=True)
+    _stops = graph.get_stops(id_list=["at:49:996:0:3", "at:49:1530:0:4"])
     #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
     #_stops = graph.get_stops_for_subdistrict(11, 2)
 
