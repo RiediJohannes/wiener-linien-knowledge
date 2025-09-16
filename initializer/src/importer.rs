@@ -38,9 +38,26 @@ pub enum ImportError {
     Connection(#[from] neo4rs::Error),
 }
 
+
+pub async fn is_database_empty(graph: &Graph) -> Result<bool, ImportError> {
+    // Ask the database to return '1' if there is ANY GTFS node and check if we received something
+    let mut result = graph.execute(query(r#"
+        MATCH (n)
+        WHERE n:Agency OR n:Route OR n:Trip OR n:Service OR n:ServiceException OR n:Stop
+        LIMIT 1
+        RETURN 1
+    "#)).await?;
+
+    match result.next().await {
+        Ok(Some(_)) => Ok(false), // DB already contains some GTFS data
+        Ok(None) => Ok(true), // DB contains no GTFS data
+        Err(e) => Err(ImportError::Connection(e))
+    }
+}
+
 /// Writes the data from the GTFS files placed in the `/gtfs` directory into the given
 /// neo4j graph instance.
-pub async fn write_gtfs_into(graph: Graph) -> Result<(), ImportError> {
+pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
     println!("Importing GTFS data into Neo4j ...");
     println!("-- Creating indexes for GTFS node types");
     // Note: Uniqueness constraints implicitly create indexes

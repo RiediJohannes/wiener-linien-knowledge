@@ -1,7 +1,7 @@
 mod importer;
 
 use dialoguer::Confirm;
-use neo4rs::{ConfigBuilder, Graph, query};
+use neo4rs::{ConfigBuilder, Graph};
 
 #[tokio::main]
 async fn main() {
@@ -21,13 +21,8 @@ async fn main() {
         .await
         .expect("Failed to connect to Neo4j instance");
 
-    // Ask the database to return '1' if there is ANY node and check if we received something
-    let mut result = graph.execute(query(r#"
-        MATCH (n)
-        WHERE n:Agency OR n:Route OR n:Trip OR n:Service OR n:ServiceException OR n:Stop
-        RETURN 1 LIMIT 1
-    "#)).await.unwrap();
-    if let Ok(Some(_)) = result.next().await {
+    let db_is_empty: bool = importer::is_database_empty(&graph).await.unwrap_or_else(|e| on_error(e));
+    if !db_is_empty {
         println!(
             "Warning: Your Neo4j instance already contains some GTFS data. Importing the GTFS data might lead to inconsistent data."
         );
@@ -39,13 +34,13 @@ async fn main() {
         }
     }
 
-    match importer::write_gtfs_into(graph).await {
-        Ok(_) => {
-            println!("Successfully initialized Neo4j database!");
-        },
-        Err(e) => {
-            eprintln!("{}", e);
-            std::process::exit(1);
-        }
+    match importer::write_gtfs_into(&graph).await {
+        Ok(_) => println!("Successfully initialized Neo4j database!"),
+        Err(e) => on_error(e)
     };
+}
+
+fn on_error(err: impl std::fmt::Display) -> ! {
+    eprintln!("{}", err);
+    std::process::exit(1);
 }
