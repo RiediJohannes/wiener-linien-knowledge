@@ -3,7 +3,7 @@ from enum import Flag, auto
 import folium
 from shapely import MultiPoint
 
-from src.components.graph import Stop, ClusterStop, Connection, ModeOfTransport, Frequency
+from src.components.types import Stop, ClusterStop, Connection, ModeOfTransport, Frequency
 
 
 # noinspection PyTypeChecker
