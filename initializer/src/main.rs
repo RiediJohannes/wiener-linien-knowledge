@@ -8,12 +8,12 @@ use neo4rs::{ConfigBuilder, Graph};
 async fn main() {
     // Parse command-line flags
     let args: Vec<String> = env::args().collect();
-    let skip_if_present = args.contains(&"--skip-if-present".to_string());
-    let force = args.contains(&"--force".to_string());
+    let abort_flag = args.contains(&"--abort-if-present".to_string());
+    let force_flag = args.contains(&"--force".to_string());
 
-    const URI: &str = "127.0.0.1:7687";
+    let connection_uri = env::var("NEO4J_URI").unwrap_or("127.0.0.1:7687".to_string());
     let neo4j_config = ConfigBuilder::default()
-        .uri(URI)
+        .uri(&connection_uri)
         .user("neo4j")
         .password("")
         .db("gtfs")
@@ -22,7 +22,7 @@ async fn main() {
         .build()
         .expect("Failed to construct connection settings for Neo4j");
 
-    println!("Connecting to Neo4j instance at {} ...", URI);
+    println!("Connecting to Neo4j instance at {} ...", connection_uri);
     let graph = Graph::connect(neo4j_config)
         .await
         .expect("Failed to connect to Neo4j instance");
@@ -30,10 +30,10 @@ async fn main() {
     // Check if the database already contains some GTFS data and conditionally abort the import
     let db_is_empty: bool = importer::is_database_empty(&graph).await.unwrap_or_else(|e| on_error(e));
     if !db_is_empty {
-        if skip_if_present {
-            println!("GTFS data already present -> skipping import to prevent inconsistent data.");
+        if abort_flag {
+            println!("GTFS data already present -> aborting import to prevent inconsistent data (--abort-if-present).");
             std::process::exit(0);
-        } else if force {
+        } else if force_flag {
             println!("GTFS data already present, but proceeding with import (--force).");
         } else {
             println!(

@@ -6,7 +6,7 @@ use tokio::time::Instant;
 
 use thiserror::Error;
 
-/// Public error struct of this module, providing a easily parsable reason why the requested
+/// Public error struct of this module, providing an easily parsable reason why the requested
 /// action failed.
 #[derive(Debug, Error)]
 pub enum ImportError {
