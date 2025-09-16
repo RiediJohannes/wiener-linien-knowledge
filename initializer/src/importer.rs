@@ -4,7 +4,43 @@ use std::io::Write;
 use std::{fs, io, path};
 use tokio::time::Instant;
 
-pub async fn write_gtfs_into(graph: Graph) {
+use thiserror::Error;
+
+/// Public error struct of this module, providing a easily parsable reason why the requested
+/// action failed.
+#[derive(Debug, Error)]
+pub enum ImportError {
+    #[error("Failed to create uniqueness constraint for {node}.{prop}:\n{source}")]
+    ConstraintCreation {
+        node: String,
+        prop: String,
+        #[source]
+        source: neo4rs::Error,
+    },
+
+    #[error("Failed to create index for {node}.{prop}:\n{source}")]
+    IndexCreation {
+        node: String,
+        prop: String,
+        #[source]
+        source: neo4rs::Error,
+    },
+
+    #[error("An error occurred during the import of '{name}':\n{source}")]
+    DataImport {
+        name: String,
+        #[source]
+        source: neo4rs::Error,
+    },
+
+    /// General error that auto-maps from `neo4rs` errors
+    #[error("Database connection error: {0}")]
+    Connection(#[from] neo4rs::Error),
+}
+
+/// Writes the data from the GTFS files placed in the `/gtfs` directory into the given
+/// neo4j graph instance.
+pub async fn write_gtfs_into(graph: Graph) -> Result<(), ImportError> {
     println!("Importing GTFS data into Neo4j ...");
     println!("-- Creating indexes for GTFS node types");
     // Note: Uniqueness constraints implicitly create indexes
@@ -18,7 +54,11 @@ pub async fn write_gtfs_into(graph: Graph) {
         graph.run(neo4rs::query(&format!(
             "CREATE CONSTRAINT IF NOT EXISTS FOR {} REQUIRE {} IS UNIQUE", node, prop)))
             .await
-            .unwrap_or_else(|e| panic!("Failed to create uniqueness constraint.\nError: {}", e));
+            .map_err(|e| ImportError::ConstraintCreation {
+                node: node.to_string(),
+                prop: prop.to_string(),
+                source: e,
+            })?;
     }
 
     let index_queries = [
@@ -31,7 +71,11 @@ pub async fn write_gtfs_into(graph: Graph) {
         graph.run(neo4rs::query(&format!(
             "CREATE INDEX IF NOT EXISTS FOR {} ON {}", node, prop)))
             .await
-            .unwrap_or_else(|e| panic!("Failed to create indexes.\nError: {}", e));
+            .map_err(|e| ImportError::IndexCreation {
+                node: node.to_string(),
+                prop: prop.to_string(),
+                source: e,
+            })?;
     }
 
     let csv_queries = [
@@ -148,17 +192,18 @@ pub async fn write_gtfs_into(graph: Graph) {
         io::stdout().flush().unwrap();
 
         let start_time = Instant::now();
-        graph.run(query(query_str)).await.unwrap_or_else(|e| {
-            panic!(
-                "An error occurred during the import of '{}'.\nError: {}",
-                name, e
-            )
-        });
+        graph.run(query(query_str)).await
+            .map_err(|e| ImportError::DataImport {
+                name: name.to_string(),
+                source: e,
+            })?;
+
         println!(" -> finished in {} seconds", start_time.elapsed().as_secs());
     }
 
-    println!("Successfully initialized Neo4j database!");
+    Ok(())
 }
+
 
 #[allow(dead_code)]
 pub fn load_gtfs_in_memory(gtfs_zip_path: &str) -> gtfs_structures::Gtfs {

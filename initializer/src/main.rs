@@ -39,7 +39,13 @@ async fn main() {
         }
     }
 
-    importer::write_gtfs_into(graph).await;
-
-    println!("Successfully initialized Neo4j database!");
+    match importer::write_gtfs_into(graph).await {
+        Ok(_) => {
+            println!("Successfully initialized Neo4j database!");
+        },
+        Err(e) => {
+            eprintln!("{}", e);
+            std::process::exit(1);
+        }
+    };
 }
