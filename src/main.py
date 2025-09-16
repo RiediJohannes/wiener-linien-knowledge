@@ -1044,12 +1044,12 @@ def _(graph, mo, present):
 def _(graph, mo, present):
     _nodes = graph.get_stops(with_clusters=True, only_in_use=True)
 
-    #_connections_query = """
-    #MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
-    #WHERE s.id < t.id AND c.yearly > 4 * 365
-    #RETURN DISTINCT s as from, t as to, type(c) as label
-    #"""
-    #_connections = graph.get_connections(_connections_query)
+    _connections_query = """
+    MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
+    WHERE s.id < t.id AND c.yearly > 4 * 365
+    RETURN DISTINCT s as from, t as to, type(c) as label
+    """
+    _connections = graph.get_connections(_connections_query)
 
     _connections_query = """
     MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
@@ -1065,7 +1065,7 @@ def _(graph, mo, present):
       END as level_of_service
     RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
     """
-    _connections = graph.get_connections(_connections_query)
+    #_connections = graph.get_connections(_connections_query)
 
     _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
                                           visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
@@ -1076,6 +1076,371 @@ def _(graph, mo, present):
     _heading = mo.md("### **Explore transit connections**")
     _iframe = mo.iframe(_transport_map.as_html(), height=650)
     mo.vstack([_heading, _iframe])
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""# Mistral""")
+    return
+
+
+@app.cell
+def _(graph, mo, present):
+    # Define data sources
+    data_sources = {
+        "All stops (with clusters)": lambda: graph.get_stops(with_clusters=True),
+        "Specific stops": lambda: graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"]),
+        "Cluster: Valiergasse": lambda: graph.get_stop_cluster(stop_name='Valiergasse'),
+        "Subdistrict 11.2": lambda: graph.get_stops_for_subdistrict(11, 2),
+    }
+
+    # Create a dropdown
+    dropdown = mo.ui.dropdown(
+        options=list(data_sources.keys()),
+        value="All stops (with clusters)",
+        label="Select data source:"
+    )
+
+    # Define the map update function
+    def update_map(data_source: str) -> mo.vstack:
+        _stops = data_sources[data_source]()
+
+        _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
+        _transport_map.add_stops(_stops)
+
+        _heading = mo.md("### **Explore stop locations and clusters**")
+        _iframe = mo.iframe(_transport_map.as_html(), height=650)
+
+        return mo.vstack([_heading, _iframe])
+    return dropdown, update_map
+
+
+@app.cell
+def _(dropdown, mo, update_map):
+    mo.vstack([dropdown, update_map(dropdown.value)])
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""# Claude""")
+    return
+
+
+@app.cell
+def _(mo):
+    # Option 1: Simple dropdown selector
+    data_source_selector = mo.ui.dropdown(
+        options={
+            "All Stops (with clusters)": "all_stops",
+            "Specific Stops": "specific_stops",
+            "Valiergasse Cluster": "valiergasse_cluster", 
+            "District 11, Subdistrict 2": "district_11_2" 
+        },
+        value="All Stops (with clusters)",
+        label="Select Data Source:"
+    )
+
+    # Display the selector
+    data_source_selector
+    return (data_source_selector,)
+
+
+@app.cell
+def _(data_source_selector, graph, mo, present):
+    # In another cell - get the data based on selection
+    def get_stops_data(selection):
+        if selection == "all_stops":
+            return graph.get_stops(with_clusters=True)
+        elif selection == "specific_stops":
+            return graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
+        elif selection == "valiergasse_cluster":
+            return graph.get_stop_cluster(stop_name='Valiergasse')
+        elif selection == "district_11_2":
+            return graph.get_stops_for_subdistrict(11, 2)
+        else:
+            print("Unknown selection")
+            return []
+
+    _stops = get_stops_data(data_source_selector.value)
+
+    # Create map
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
+    _transport_map.add_stops(_stops)
+
+    # Display
+    _heading = mo.md(f"### **Explore stop locations and clusters** - *{data_source_selector.value.replace('_', ' ').title()}*")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+    mo.vstack([data_source_selector, _heading, _iframe])
+    return
+
+
+@app.cell
+def _(mo):
+    # Option 2: More advanced with custom inputs
+
+    # Main data source selector
+    main_selector = mo.ui.dropdown(
+        options={
+            "All Stops (with clusters)": "all_stops",
+            "Specific Stops": "specific_stops",
+            "Valiergasse Cluster": "valiergasse_cluster", 
+            "District 11, Subdistrict 2": "district_11_2" 
+        },
+        value="All Stops (with clusters)",
+        label="Data Source:"
+    )
+    return (main_selector,)
+
+
+@app.cell
+def _(main_selector, mo):
+    # Conditional inputs based on selection
+    stop_ids_input = mo.ui.text_area(
+        value="at:49:1000:0:1,at:49:1081:0:1",
+        label="Stop IDs (comma-separated):",
+        disabled=main_selector.value != "specific_stops"
+    )
+
+    cluster_name_input = mo.ui.text(
+        value="Valiergasse",
+        label="Stop Cluster Name:",
+        disabled=main_selector.value != "stop_cluster"
+    )
+
+    district_input = mo.ui.number(
+        value=11,
+        start=1,
+        stop=23,
+        label="District:",
+        disabled=main_selector.value != "subdistrict"
+    )
+
+    subdistrict_input = mo.ui.number(
+        value=2,
+        start=1,
+        stop=10,
+        label="Subdistrict:",
+        disabled=main_selector.value != "subdistrict"
+    )
+
+    # Display controls
+    controls = mo.vstack([
+        main_selector,
+        mo.md("**Parameters:**").callout(kind="neutral") if main_selector.value != "all_stops" else mo.md(""),
+        stop_ids_input if main_selector.value == "specific_stops" else mo.md(""),
+        cluster_name_input if main_selector.value == "stop_cluster" else mo.md(""),
+        mo.hstack([district_input, subdistrict_input]) if main_selector.value == "subdistrict" else mo.md("")
+    ])
+
+    controls
+    return (
+        cluster_name_input,
+        district_input,
+        stop_ids_input,
+        subdistrict_input,
+    )
+
+
+@app.cell
+def _(
+    cluster_name_input,
+    district_input,
+    graph,
+    main_selector,
+    mo,
+    present,
+    stop_ids_input,
+    subdistrict_input,
+):
+    # In another cell - process the data
+    def get_dynamic_stops_data():
+        selection = main_selector.value
+    
+        if selection == "all_stops":
+            return graph.get_stops(with_clusters=True), "All Stops with Clusters"
+        elif selection == "specific_stops":
+            ids = [id.strip() for id in stop_ids_input.value.split(",") if id.strip()]
+            return graph.get_stops(id_list=ids), f"Specific Stops ({len(ids)} IDs)"
+        elif selection == "stop_cluster":
+            name = cluster_name_input.value
+            return graph.get_stop_cluster(stop_name=name), f"Cluster: {name}"
+        elif selection == "subdistrict":
+            district = district_input.value
+            subdistrict = subdistrict_input.value
+            return graph.get_stops_for_subdistrict(district, subdistrict), f"District {district}, Subdistrict {subdistrict}"
+    
+        return [], "No Data"
+
+    _stops, _description = get_dynamic_stops_data()
+
+    # Create and display map
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
+    _transport_map.add_stops(_stops)
+
+    _heading = mo.md(f"### **Transport Map** - *{_description}* ({len(_stops)} stops)")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+
+    mo.vstack([_heading, _iframe])
+    return
+
+
+@app.cell
+def _(mo):
+    # Option 3: Tabbed interface
+    tabs = mo.ui.tabs({
+        "All Stops": mo.md("Shows all stops with clusters enabled"),
+        "Specific": mo.vstack([
+            mo.ui.text_area(
+                value="at:49:1000:0:1,at:49:1081:0:1",
+                label="Enter stop IDs (comma-separated):"
+            )
+        ]),
+        "Cluster": mo.vstack([
+            mo.ui.text(value="Valiergasse", label="Cluster name:")
+        ]),
+        "District": mo.vstack([
+            mo.hstack([
+                mo.ui.number(value=11, start=1, stop=23, label="District:"),
+                mo.ui.number(value=2, start=1, stop=10, label="Subdistrict:")
+            ])
+        ])
+    })
+
+    tabs
+    return
+
+
+@app.cell
+def _(mo):
+    # Cell 1: Create the tabbed interface with inputs
+
+    # Create UI elements for each tab
+    stop_ids_input_2 = mo.ui.text_area(
+        value="at:49:1000:0:1,at:49:1081:0:1",
+        label="Enter stop IDs (comma-separated):",
+        placeholder="at:49:1000:0:1,at:49:1081:0:1"
+    )
+
+    cluster_name_input_2 = mo.ui.text(
+        value="Valiergasse", 
+        label="Cluster name:",
+        placeholder="Enter stop cluster name"
+    )
+
+    district_input_2 = mo.ui.number(
+        value=11, 
+        start=1, 
+        stop=23, 
+        label="District:"
+    )
+
+    subdistrict_input_2 = mo.ui.number(
+        value=2, 
+        start=1, 
+        stop=10, 
+        label="Subdistrict:"
+    )
+
+    # Create the tabbed interface
+    data_source_tabs = mo.ui.tabs({
+        "All Stops": mo.vstack([
+            mo.md("**All Stops with Clusters**"),
+            mo.md("Shows all transit stops in Vienna with clustering enabled for better visualization.")
+        ]),
+        "Specific Stops": mo.vstack([
+            mo.md("**Select Specific Stops**"),
+            stop_ids_input_2,
+            mo.md("*Enter Vienna transit stop IDs separated by commas*")
+        ]),
+        "Stop Cluster": mo.vstack([
+            mo.md("**Stop Cluster by Name**"),
+            cluster_name_input_2,
+            mo.md("*Find all stops belonging to a named cluster/station*")
+        ]),
+        "District": mo.vstack([
+            mo.md("**Stops by District/Subdistrict**"),
+            mo.hstack([district_input_2, subdistrict_input_2]),
+            mo.md("*Vienna has 23 districts, each with multiple subdistricts*")
+        ])
+    })
+
+    # Display the tabs
+    mo.vstack([
+        mo.md("## **Vienna Transit Data Explorer**"),
+        mo.md("Select a data source to explore different views of Vienna's public transport network:"),
+        data_source_tabs
+    ])
+    return (data_source_tabs,)
+
+
+@app.cell
+def _(
+    cluster_name_input,
+    data_source_tabs,
+    district_input,
+    graph,
+    mo,
+    present,
+    stop_ids_input,
+    subdistrict_input,
+):
+    # Cell 2: Process the selected data and create the map
+
+    def get_selected_data():
+        """Get data based on the currently selected tab and inputs"""
+        active_tab = data_source_tabs.value
+    
+        if active_tab == "All Stops":
+            stops = graph.get_stops(with_clusters=True)
+            description = "All Stops with Clusters"
+        
+        elif active_tab == "Specific Stops":
+            # Parse the comma-separated stop IDs
+            stop_ids = [id.strip() for id in stop_ids_input.value.split(",") if id.strip()]
+            stops = graph.get_stops(id_list=stop_ids)
+            description = f"Specific Stops ({len(stop_ids)} requested)"
+        
+        elif active_tab == "Stop Cluster":
+            cluster_name = cluster_name_input.value.strip()
+            stops = graph.get_stop_cluster(stop_name=cluster_name)
+            description = f"Cluster: {cluster_name}"
+        
+        elif active_tab == "District":
+            district = district_input.value
+            subdistrict = subdistrict_input.value
+            stops = graph.get_stops_for_subdistrict(district, subdistrict)
+            description = f"District {district}, Subdistrict {subdistrict}"
+        
+        else:
+            stops = []
+            description = "No data selected"
+    
+        return stops, description
+
+    # Get the data
+    _stops, _description = get_selected_data()
+
+    # Create the transport map
+    _transport_map = present.TransportMap(
+        lat=48.2102331, 
+        lon=16.3796424, 
+        zoom=11
+        # Uncomment these lines if you want to use custom tiles:
+        # custom_tile_source='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
+        # custom_attribution='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    )
+
+    # Add the stops to the map
+    _transport_map.add_stops(_stops)
+
+    # Display the results
+    _heading = mo.md(f"### **{_description}**")
+    _stats = mo.md(f"*Showing {len(_stops)} stops*")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+
+    mo.vstack([_heading, _stats, _iframe])
     return
 
 

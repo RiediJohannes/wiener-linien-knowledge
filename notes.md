@@ -64,6 +64,9 @@ They were particularly fond of:
 - 15.9.
   - 13:00-16:00
   - 17:30-20:30
+  - 22:30-2:30
+- 16.9.
+  - 16:30-
 
 ## Submission
 
