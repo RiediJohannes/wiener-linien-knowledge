@@ -979,7 +979,7 @@ def _(mo):
         r"""
     ## Link Prediction
 
-    With our KG embedding models trained, we can now utilize them to generate predictions about missing links in the public transport network. This is done by prompting the trained model with incomplete triples, i.e., triples $(h, r, t)$ where exactly one of the three components is left blank. The model will then fill this gap with various entities and assess their likelyhood. We take the guessed triples with the highest probability to retrieve the most reasonable predictions, according to the model. 
+    With our KG embedding models trained, we can now utilize them to generate predictions about missing links in the public transport network. This is done by prompting the trained model with incomplete triples, i.e., triples $(h, r, t)$ where exactly one of the three components is left blank. The model will then fill this gap with various entities and assess their likelyhood. We take the guessed triples with the highest probability to retrieve the most reasonable predictions, according to the model.
     """
     )
     return
@@ -1030,10 +1030,13 @@ def _(graph, mo, present):
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
     # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    _transport_map = present.TransportMap(lat=48.2202331, lon=16.3796424, zoom=11)
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
     _transport_map.add_stops(_stops)
 
-    mo.iframe(_transport_map.as_html(), height=650)
+    # Visible output
+    _heading = mo.md("### **Explore stop locations and clusters**")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+    mo.vstack([_heading, _iframe])
     return
 
 
@@ -1048,11 +1051,15 @@ def _(graph, mo, present):
     """
     _connections = graph.get_connections(_connections_query)
 
-    _transport_map = present.TransportMap(lat=48.2202331, lon=16.3796424, zoom=11)
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
+                                          visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
     _transport_map.add_transit_nodes(_nodes)
     _transport_map.add_transit_connections(_connections)
 
-    mo.iframe(_transport_map.as_html(), height=650)
+    # Visible output
+    _heading = mo.md("### **Explore transit connections**")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+    mo.vstack([_heading, _iframe])
     return
 
 
