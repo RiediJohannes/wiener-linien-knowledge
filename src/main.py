@@ -1044,10 +1044,26 @@ def _(graph, mo, present):
 def _(graph, mo, present):
     _nodes = graph.get_stops(with_clusters=True, only_in_use=True)
 
+    #_connections_query = """
+    #MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
+    #WHERE s.id < t.id AND c.yearly > 4 * 365
+    #RETURN DISTINCT s as from, t as to, type(c) as label
+    #"""
+    #_connections = graph.get_connections(_connections_query)
+
     _connections_query = """
-    MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
-    WHERE s.id < t.id AND c.yearly > 4 * 365
-    RETURN DISTINCT s as from, t as to, type(c) as label
+    MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
+    WHERE s1.id < s2.id AND conn.yearly > 4 * 365
+    WITH conn, s1, s2,
+      CASE 
+        WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
+        WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
+        WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
+        WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
+        WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
+        ELSE 'RARELY_TO'
+      END as level_of_service
+    RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
     """
     _connections = graph.get_connections(_connections_query)
 

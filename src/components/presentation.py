@@ -22,12 +22,12 @@ class TransportMap:
     }
 
     frequency_colours: dict[Frequency, str] = {
-        Frequency.NONSTOP_TO: "#11a611",
-        Frequency.VERY_FREQUENTLY_TO: "#65a611",
-        Frequency.FREQUENTLY_TO: "#9ea611",
-        Frequency.REGULARLY_TO: "#a67711",
-        Frequency.OCCASIONALLY_TO: "#a64511",
-        Frequency.RARELY_TO: "#a61111",
+        Frequency.NONSTOP_TO: "#047a04",
+        Frequency.VERY_FREQUENTLY_TO: "#59ad10",
+        Frequency.FREQUENTLY_TO: "#c8d124",
+        Frequency.REGULARLY_TO: "#bd8408",
+        Frequency.OCCASIONALLY_TO: "#a83605",
+        Frequency.RARELY_TO: "#8c0404",
         Frequency.UNKNOWN: "#7a7671",
     }
 
@@ -134,16 +134,23 @@ class TransportMap:
                     ModeOfTransport.TRAM: 2,
                     ModeOfTransport.BUS: 1
                 }.get(conn.mode_of_transport, 1)
+                opacity = 0.7
             else:
                 colour = self.frequency_colours[conn.frequency]
-                thickness = 2
+                thickness = {
+                    Frequency.NONSTOP_TO: 3,
+                    Frequency.VERY_FREQUENTLY_TO: 3,
+                    Frequency.FREQUENTLY_TO: 2,
+                    Frequency.REGULARLY_TO: 2
+                }.get(conn.frequency, 1)
+                opacity = 0.85
 
             # Add the line to the map
             folium.PolyLine(
                 locations=line_coords,
                 color=colour,
                 weight=thickness,
-                opacity=0.7,
+                opacity=opacity,
                 pane="connections"
             ).add_to(self.connections)
 
