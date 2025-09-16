@@ -1,0 +1,51 @@
+name: wiener-linien-knowledge
+
+services:
+  neo4j:
+    image: neo4j
+    container_name: neo4j
+    restart: unless-stopped
+    environment:
+      - NEO4J_AUTH=none
+      - NEO4J_initial_dbms_default__database=gtfs
+      - NEO4J_server_directories_import=/import
+      - NEO4J_PLUGINS=["apoc"]
+    ports:
+      - "7474:7474"   # HTTP (Browser UI)
+      - "7687:7687"   # Bolt (Driver connections)
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+      - neo4j_plugins:/plugins
+      - ./data/wiener_linien_gtfs:/import/gtfs
+      - ./data/city:/import/city
+    networks:
+      - kg-network
+    healthcheck:
+      test: [ "CMD", "cypher-shell", "-u", "neo4j", "-p", "", "RETURN 1" ]
+      start_period: 30s        # Grace period before health-checks count towards failures
+      start_interval: 2s       # Frequent checks during startup
+      interval: 10s            # Normal check-up interval after startup
+      timeout: 5s              # How long to wait for response
+      retries: 3               # Number of failures before unhealthy
+
+  kg-initializer:
+    build: ./initializer  # Where to find build instructions if there is no initializer:latest container in the cache
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      - NEO4J_URI=neo4j:7687  # Use service name instead of 127.0.0.1
+    networks:
+      - kg-network
+    command: ["initializer", "--abort-if-present"]
+    restart: "no"
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  neo4j_plugins:
+
+networks:
+  kg-network:
+    driver: bridge
