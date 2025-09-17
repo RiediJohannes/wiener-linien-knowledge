@@ -66,7 +66,7 @@ async fn main() {
         println!("  City data already present ✔️");
     }
 
-    println!("\n=== Successfully initialized Neo4j database! ===");
+    println!("\n=== Successfully initialized Neo4j database ===");
 }
 
 fn on_error(err: impl std::fmt::Display) -> ! {

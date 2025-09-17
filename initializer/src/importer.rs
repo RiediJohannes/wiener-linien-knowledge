@@ -1,4 +1,4 @@
-use indicatif::{HumanDuration, MultiProgress, ProgressBar};
+use indicatif::{HumanDuration, MultiProgress, ProgressBar, ProgressStyle};
 use neo4rs::Graph;
 use path::PathBuf;
 use std::time::Duration;
@@ -76,10 +76,10 @@ pub async fn db_contains_city_data(graph: &Graph) -> Result<bool, ImportError> {
 /// neo4j graph instance.
 pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
     let multi_progress = MultiProgress::new();
-    let outer_spinner = multi_progress.fork_spinner(300, "Importing GTFS data into Neo4j ...".to_string());
+    let outer_spinner = multi_progress.fork_parent_spinner("Importing GTFS data into Neo4j ...".to_string());
 
     // Note: Uniqueness constraints implicitly create indexes
-    let local_spinner = multi_progress.fork_spinner(100, "Creating uniqueness constraints for GTFS node types".to_string());
+    let local_spinner = multi_progress.fork_child_spinner("Creating uniqueness constraints for GTFS node types".to_string());
     let uniqueness_constraints = [
         ("(r:Route)",   "r.id"),
         ("(s:Service)", "s.id"),
@@ -98,7 +98,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
     }
     local_spinner.finish_with_message("✅  Created uniqueness constraints for GTFS node types");
 
-    let local_spinner = multi_progress.fork_spinner(100, "Creating indexes for GTFS node types".to_string());
+    let local_spinner = multi_progress.fork_child_spinner("Creating indexes for GTFS node types".to_string());
     let index_queries = [
         ("(ex:ServiceException)", "(ex.service_id)"),
         ("(s:Stop)", "(s.lon)"),
@@ -237,15 +237,15 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         })?;
     }
 
-    outer_spinner.finish_with_message("-- GTFS data imports ✔️");
+    outer_spinner.finish_with_message(" -- GTFS data imports ✔️");
     Ok(())
 }
 
 pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError> {
     let multi_progress = MultiProgress::new();
-    let outer_spinner = multi_progress.fork_spinner(300, "Importing Vienna city data into Neo4j ...".to_string());
+    let outer_spinner = multi_progress.fork_parent_spinner("Importing Vienna city data into Neo4j ...".to_string());
 
-    let local_spinner = multi_progress.fork_spinner(100, "Creating indexes for subdistrict codes".to_string());
+    let local_spinner = multi_progress.fork_child_spinner("Creating indexes for subdistrict codes".to_string());
     let index_queries = [
         ("(s:SubDistrict)", "(s.district_num)"),
         ("(s:SubDistrict)", "(s.sub_district_num)"),
@@ -264,7 +264,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
 
     let city_csv_queries = [
         (
-            "population data",
+            "Importing population data",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///city/vienna_population.csv' AS row
         FIELDTERMINATOR ';' // specify the custom delimiter
@@ -276,7 +276,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
         "#
         ),
         (
-            "registration district names",
+            "Importing registration district names",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_names.csv' AS row
         FIELDTERMINATOR ';' // specify the custom delimiter
@@ -288,7 +288,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
         "#
         ),
         (
-            "registration district coordinates",
+            "Importing registration district coordinates",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_shapes.csv' AS row
         MERGE (s:SubDistrict {
@@ -310,7 +310,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
             })?;
     }
 
-    outer_spinner.finish_with_message("-- Vienna city data imports ✔️");
+    outer_spinner.finish_with_message(" -- Vienna city data imports ✔️");
     print!("\r\n");
 
     Ok(())
@@ -319,6 +319,8 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
 
 trait SpinnerPool {
     fn fork_spinner(&self, tick_millis: u64, start_message: String) -> ProgressBar;
+    fn fork_parent_spinner(&self, start_message: String) -> ProgressBar;
+    fn fork_child_spinner(&self, start_message: String) -> ProgressBar;
 }
 
 impl SpinnerPool for MultiProgress {
@@ -326,6 +328,26 @@ impl SpinnerPool for MultiProgress {
         let spinner = self.add(ProgressBar::new_spinner());
         spinner.enable_steady_tick(Duration::from_millis(tick_millis));
         spinner.set_message(start_message);
+        spinner
+    }
+    fn fork_parent_spinner(&self, start_message: String) -> ProgressBar {
+        let spinner = self.fork_spinner(200, start_message);
+        spinner.set_style(
+            ProgressStyle::with_template("{spinner:.blue} {msg:.bold}")
+                .unwrap_or(ProgressStyle::default_spinner())
+                .tick_strings(&[". ", "..", " .", "  "])
+        );
+
+        spinner
+    }
+    fn fork_child_spinner(&self, start_message: String) -> ProgressBar {
+        let spinner = self.fork_spinner(100, start_message);
+        spinner.set_style(
+            ProgressStyle::with_template("  {spinner:.green} {msg}")
+                .unwrap_or(ProgressStyle::default_spinner())
+                .tick_chars("⣾⣽⣻⢿⡿⣟⣯⣷ ")
+        );
+
         spinner
     }
 }
@@ -336,7 +358,7 @@ async fn run_task_with_spinner<T, E>(
     spinner_pool: &dyn SpinnerPool
 ) -> Result<T, E>
 {
-    let spinner = spinner_pool.fork_spinner(100, status_msg.clone());
+    let spinner = spinner_pool.fork_child_spinner(status_msg.clone());
     //spinner.set_style(ProgressStyle::with_template("  {spinner} {msg}").unwrap_or(ProgressStyle::default_spinner()));
 
     spinner.set_message(status_msg.clone());
