@@ -68,8 +68,9 @@ They were particularly fond of:
 - 16.9.
   - 16:30-22:00
 - 17.9.
-  - 14:00-
-
+  - 14:00-19:00
+  - 22:00
+  
 ## Submission
 
 ### Data sources

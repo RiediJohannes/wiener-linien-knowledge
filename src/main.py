@@ -14,7 +14,10 @@ def imports():
     import src.components.presentation as present
     import src.components.learning as learning
     import src.components.prediction as prediction
-    return geo, graph, learning, mo, prediction, present
+
+    def print_raw(message: str):
+        mo.output.append(mo.plain_text(message))
+    return geo, graph, learning, mo, prediction, present, print_raw
 
 
 @app.cell(hide_code=True)
@@ -22,6 +25,90 @@ def project_heading(mo):
     mo.callout(mo.md("""
     # 🚊 Wiener Linien Knowledge Graph 🚋
     """), kind='danger')
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    # The Knowledge Graph
+
+    If you started this project as instructed (using docker compose), you should already have a running instance of the **Neo4j graph database** filled with (or currently being filled with) **geographic and demographic data** about the city of Vienna as well as a vast dataset of the city's **public transport schedule** for 2025. This data has been mapped from various CSV files into a graph structure.
+
+    You can check the availability and status of the knowledge graph below:
+    """
+    )
+    return
+
+
+@app.cell
+def _(graph, mo, print_raw):
+    _labels = [
+        ("Agencies", "agencies"), 
+        ("Routes", "routes"), 
+        ("Trips", "trips"), 
+        ("Stops", "stops"), 
+        ("Services", "services"), 
+        ("Service exceptions", "exceptions")
+    ]
+
+    _node_count_query = """
+    MATCH (n)
+    RETURN
+      count(CASE WHEN n:Agency THEN 1 END) AS agencies,
+      count(CASE WHEN n:Route THEN 1 END) AS routes,
+      count(CASE WHEN n:Trip THEN 1 END) AS trips,
+      count(CASE WHEN n:Stop THEN 1 END) AS stops,
+      count(CASE WHEN n:Service THEN 1 END) AS services,
+      count(CASE WHEN n:ServiceException THEN 1 END) AS exceptions,
+      count(CASE WHEN n:SubDistrict THEN 1 END) AS subdistricts
+    """
+
+    _stop_times_query = """
+    MATCH ()-[r:STOPS_AT]->()
+    RETURN count(r) as count
+    """
+
+    _city_data_query = """
+    OPTIONAL MATCH (n:SubDistrict)
+    WHERE n.name IS NULL
+    OPTIONAL MATCH (s:SubDistrict)
+    WHERE s.shape IS NULL
+    RETURN count(n) AS no_name_count, count(s) AS no_shape_count
+    """
+
+    def _update_graph_status(_event):
+        _kg_available = graph.is_available()
+        _availability_text = "✅ Graph database is available" if _kg_available else "❌ Graph database is currently not available"
+        _status_header = mo.hstack([_availability_text, graph_status_refresh])
+        mo.output.append(_status_header)
+    
+        if _kg_available:
+            mo.output.append("Verifying GTFS data presence:")
+            _node_counts = graph.execute_query(_node_count_query)[0]
+            for name, key in _labels:
+                _count = _node_counts[key] if key in _node_counts.keys() else 0
+                print_raw(f"\t✅ {name}: {_count}" if _count > 0 else f"\t❌ No {name.lower()}")
+    
+            _stop_times = graph.execute_query(_stop_times_query)
+            print_raw(f"\t✅ Stop times: {_stop_times[0]["count"]}" if _stop_times else f"\t❌ No stop times")
+        
+            mo.output.append("Verifying geographic/demographic data presence:")
+            _count = _node_counts["subdistricts"] if key in _node_counts.keys() else 0
+            print_raw(f"\t✅ Subdistricts: {_count}" if _count > 0 else f"\t❌ No subdistricts")
+            _city_data = graph.execute_query(_city_data_query)[0]
+            print_raw(f"\t✅ Subdistricts names" if _city_data['no_name_count'] == 0 else f"\t❌ Some subdistricts have no name")
+            print_raw(f"\t✅ Subdistricts shapes" if _city_data['no_shape_count'] == 0 else f"\t❌ Some subdistricts have no shape")
+
+
+    graph_status_refresh = mo.ui.refresh(
+      label="Refresh status",
+      options=["5s", "1m", "10m"],
+      on_change=_update_graph_status
+    )
+
+    _update_graph_status(None)
     return
 
 

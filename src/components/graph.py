@@ -10,6 +10,14 @@ AUTH = ("neo4j", "")
 driver = GraphDatabase.driver(URI, auth=AUTH)
 
 
+# noinspection PyBroadException
+def is_available():
+    try:
+        driver.verify_connectivity()
+        return True
+    except:
+        return False
+
 def get_subdistricts() -> list[SubDistrict]:
     query = """
     MATCH (s:SubDistrict)
