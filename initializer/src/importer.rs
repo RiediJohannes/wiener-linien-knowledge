@@ -1,4 +1,4 @@
-use indicatif::{HumanDuration, MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use neo4rs::Graph;
 use path::PathBuf;
 use std::time::Duration;
@@ -366,11 +366,26 @@ async fn run_task_with_spinner<T, E>(
 
     let result = task.await;
     if result.is_ok() {
-        spinner.finish_with_message(format!("✅  {} -> finished in {}", status_msg, HumanDuration(start_time.elapsed())));
+        spinner.finish_with_message(format!("✅  {} -> finished in {}", status_msg, intuitive_duration(start_time.elapsed())));
     }
 
     result
 }
+
+fn intuitive_duration(duration: Duration) -> String {
+    let total_millis = duration.as_millis();
+    let total_secs = duration.as_secs_f64();
+
+    if total_millis < 1000 {
+        format!("{} milliseconds", total_millis)
+    } else if total_secs < 60.0 {
+        format!("{:.1} seconds", total_secs)
+    } else {
+        let total_mins = total_secs / 60.0;
+        format!("{:.1} minutes", total_mins)
+    }
+}
+
 
 
 #[allow(dead_code)]
