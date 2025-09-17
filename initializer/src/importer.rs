@@ -1,10 +1,10 @@
-use neo4rs::{Graph, query};
+use indicatif::{HumanDuration, MultiProgress, ProgressBar};
+use neo4rs::{query, Graph};
 use path::PathBuf;
-use std::io::Write;
-use std::{fs, io, path};
-use tokio::time::Instant;
-
+use std::time::Duration;
+use std::{fs, path};
 use thiserror::Error;
+use tokio::time::Instant;
 
 /// Public error struct of this module, providing an easily parsable reason why the requested
 /// action failed.
@@ -58,9 +58,13 @@ pub async fn is_database_empty(graph: &Graph) -> Result<bool, ImportError> {
 /// Writes the data from the GTFS files placed in the `/gtfs` directory into the given
 /// neo4j graph instance.
 pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
-    println!("Importing GTFS data into Neo4j ...");
-    println!("-- Creating indexes for GTFS node types");
+    let multi_progress = MultiProgress::new();
+    let outer_spinner = fork_spinner(&multi_progress, 300,
+                                     "Importing GTFS data into Neo4j ...".to_string());
+
     // Note: Uniqueness constraints implicitly create indexes
+    let local_spinner = fork_spinner(&multi_progress, 150,
+                                     "Creating uniqueness constraints for GTFS node types".to_string());
     let uniqueness_constraints = [
         ("(r:Route)",   "r.id"),
         ("(s:Service)", "s.id"),
@@ -77,7 +81,10 @@ pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
                 source: e,
             })?;
     }
+    local_spinner.finish_with_message("✅  Created uniqueness constraints for GTFS node types");
 
+    let local_spinner = fork_spinner(&multi_progress, 150,
+                                     "Creating indexes for GTFS node types".to_string());
     let index_queries = [
         ("(ex:ServiceException)", "(ex.service_id)"),
         ("(s:Stop)", "(s.lon)"),
@@ -94,6 +101,8 @@ pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
                 source: e,
             })?;
     }
+    local_spinner.finish_with_message("✅  Created indexes for GTFS node types");
+
 
     let csv_queries = [
         (
@@ -205,20 +214,46 @@ pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
     ];
 
     for (name, query_str) in csv_queries {
-        print!("-- Importing: {}", name);
-        io::stdout().flush().unwrap();
-
-        let start_time = Instant::now();
-        graph.run(query(query_str)).await
+        let query_task = graph.run(query(query_str));
+        let status_message = format!("Importing: {}", name);
+        run_task_with_spinner(query_task, status_message, &multi_progress).await
             .map_err(|e| ImportError::DataImport {
-                name: name.to_string(),
-                source: e,
-            })?;
-
-        println!(" -> finished in {} seconds", start_time.elapsed().as_secs());
+            name: name.to_string(),
+            source: e,
+        })?;
     }
 
+    outer_spinner.finish_with_message("\r✅  Imported GTFS data into Neo4j");
     Ok(())
+}
+
+// fn run_task_with_spinner(query: &str, status_msg: &str) {
+async fn run_task_with_spinner<T, E>(
+    task: impl Future<Output = Result<T, E>>,
+    status_msg: String,
+    spinner_pool: &MultiProgress
+) -> Result<T, E>
+{
+    let spinner = spinner_pool.add(ProgressBar::new_spinner());
+    //spinner.set_style(ProgressStyle::with_template("  {spinner} {msg}").unwrap_or(ProgressStyle::default_spinner()));
+    spinner.enable_steady_tick(Duration::from_millis(150));
+
+    spinner.set_message(status_msg.clone());
+    let start_time = Instant::now();
+
+    let result = task.await;
+    if result.is_ok() {
+        spinner.finish_with_message(format!("✅  {} -> finished in {}", status_msg, HumanDuration(start_time.elapsed())));
+    }
+
+    result
+}
+
+fn fork_spinner(spinner_pool: &MultiProgress, tick_millis: u64, start_message: String) -> ProgressBar {
+    let spinner = spinner_pool.add(ProgressBar::new_spinner());
+    spinner.enable_steady_tick(Duration::from_millis(tick_millis));
+    spinner.set_message(start_message);
+    spinner
 }
 
 

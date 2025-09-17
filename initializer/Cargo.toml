@@ -9,3 +9,4 @@ neo4rs = "0.8.0"
 tokio = { version = "1.47.1", features = ["rt", "rt-multi-thread", "macros"] }
 dialoguer = "0.12"
 thiserror = "1.0.69"
+indicatif = "0.18.0"
