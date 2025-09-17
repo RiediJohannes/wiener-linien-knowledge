@@ -192,39 +192,39 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         MERGE (ex)-[:FOR_SERVICE]->(s)
         "#,
         ),
-        // (
-        //     "trips",
-        //     r#"
-        // LOAD CSV WITH HEADERS FROM 'file:///gtfs/trips.txt' AS row
-        // CALL (row) {
-        //     MATCH (r:Route {id: row.route_id})
-        //     MATCH (s:Service {id: row.service_id})
-        //     MERGE (t:Trip {id: row.trip_id})
-        //     SET t.headsign = row.trip_headsign,
-        //         t.direction = toInteger(row.direction_id),
-        //         t.block = row.block_id
-        //     MERGE (t)-[:PART_OF_ROUTE]->(r)
-        //     MERGE (t)-[:OPERATING_ON]->(s)
-        // } IN TRANSACTIONS OF 10000 ROWS
-        // "#,
-        // ),
-        // (
-        //     "stop times",
-        //     r#"
-        // LOAD CSV WITH HEADERS FROM 'file:///gtfs/stop_times.txt' AS row
-        // CALL (row) {
-        //     MATCH (t:Trip {id: row.trip_id})
-        //     MATCH (s:Stop {id: row.stop_id})
-        //     // Use CREATE instead of MERGE since MERGE for relationships is very inefficient
-        //     CREATE (t)-[at:STOPS_AT {stop_sequence: toInteger(row.stop_sequence)}]->(s)
-        //     SET at.arrival_time = localtime(row.arrival_time),
-        //         at.departure_time = localtime(row.departure_time),
-        //         at.pickup_type = toInteger(row.pickup_type),
-        //         at.drop_off_type = toInteger(row.drop_off_type),
-        //         at.distance = row.shape_dist_traveled
-        // } IN TRANSACTIONS OF 10000 ROWS
-        // "#,
-        // ),
+        (
+            "trips",
+            r#"
+        LOAD CSV WITH HEADERS FROM 'file:///gtfs/trips.txt' AS row
+        CALL (row) {
+            MATCH (r:Route {id: row.route_id})
+            MATCH (s:Service {id: row.service_id})
+            MERGE (t:Trip {id: row.trip_id})
+            SET t.headsign = row.trip_headsign,
+                t.direction = toInteger(row.direction_id),
+                t.block = row.block_id
+            MERGE (t)-[:PART_OF_ROUTE]->(r)
+            MERGE (t)-[:OPERATING_ON]->(s)
+        } IN TRANSACTIONS OF 10000 ROWS
+        "#,
+        ),
+        (
+            "stop times",
+            r#"
+        LOAD CSV WITH HEADERS FROM 'file:///gtfs/stop_times.txt' AS row
+        CALL (row) {
+            MATCH (t:Trip {id: row.trip_id})
+            MATCH (s:Stop {id: row.stop_id})
+            // Use CREATE instead of MERGE since MERGE for relationships is very inefficient
+            CREATE (t)-[at:STOPS_AT {stop_sequence: toInteger(row.stop_sequence)}]->(s)
+            SET at.arrival_time = localtime(row.arrival_time),
+                at.departure_time = localtime(row.departure_time),
+                at.pickup_type = toInteger(row.pickup_type),
+                at.drop_off_type = toInteger(row.drop_off_type),
+                at.distance = row.shape_dist_traveled
+        } IN TRANSACTIONS OF 10000 ROWS
+        "#,
+        ),
     ];
 
     for (name, query_str) in gtfs_csv_queries {
