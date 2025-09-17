@@ -1,5 +1,5 @@
 use indicatif::{HumanDuration, MultiProgress, ProgressBar};
-use neo4rs::{query, Graph};
+use neo4rs::{Graph};
 use path::PathBuf;
 use std::time::Duration;
 use std::{fs, path};
@@ -41,7 +41,7 @@ pub enum ImportError {
 
 pub async fn is_database_empty(graph: &Graph) -> Result<bool, ImportError> {
     // Ask the database to return '1' if there is ANY GTFS node and check if we received something
-    let mut result = graph.execute(query(r#"
+    let mut result = graph.execute(neo4rs::query(r#"
         MATCH (n)
         WHERE n:Agency OR n:Route OR n:Trip OR n:Service OR n:ServiceException OR n:Stop
         LIMIT 1
@@ -57,14 +57,12 @@ pub async fn is_database_empty(graph: &Graph) -> Result<bool, ImportError> {
 
 /// Writes the data from the GTFS files placed in the `/gtfs` directory into the given
 /// neo4j graph instance.
-pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
+pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
     let multi_progress = MultiProgress::new();
-    let outer_spinner = fork_spinner(&multi_progress, 300,
-                                     "Importing GTFS data into Neo4j ...".to_string());
+    let outer_spinner = multi_progress.fork_spinner(300, "Importing GTFS data into Neo4j ...".to_string());
 
     // Note: Uniqueness constraints implicitly create indexes
-    let local_spinner = fork_spinner(&multi_progress, 150,
-                                     "Creating uniqueness constraints for GTFS node types".to_string());
+    let local_spinner = multi_progress.fork_spinner(150, "Creating uniqueness constraints for GTFS node types".to_string());
     let uniqueness_constraints = [
         ("(r:Route)",   "r.id"),
         ("(s:Service)", "s.id"),
@@ -83,8 +81,7 @@ pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
     }
     local_spinner.finish_with_message("✅  Created uniqueness constraints for GTFS node types");
 
-    let local_spinner = fork_spinner(&multi_progress, 150,
-                                     "Creating indexes for GTFS node types".to_string());
+    let local_spinner = multi_progress.fork_spinner(150, "Creating indexes for GTFS node types".to_string());
     let index_queries = [
         ("(ex:ServiceException)", "(ex.service_id)"),
         ("(s:Stop)", "(s.lon)"),
@@ -104,7 +101,7 @@ pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
     local_spinner.finish_with_message("✅  Created indexes for GTFS node types");
 
 
-    let csv_queries = [
+    let gtfs_csv_queries = [
         (
             "Agencies",
             r#"
@@ -178,44 +175,44 @@ pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
         MERGE (ex)-[:FOR_SERVICE]->(s)
         "#,
         ),
-        (
-            "Trips",
-            r#"
-        LOAD CSV WITH HEADERS FROM 'file:///gtfs/trips.txt' AS row
-        CALL (row) {
-            MATCH (r:Route {id: row.route_id})
-            MATCH (s:Service {id: row.service_id})
-            MERGE (t:Trip {id: row.trip_id})
-            SET t.headsign = row.trip_headsign,
-                t.direction = toInteger(row.direction_id),
-                t.block = row.block_id
-            MERGE (t)-[:PART_OF_ROUTE]->(r)
-            MERGE (t)-[:OPERATING_ON]->(s)
-        } IN TRANSACTIONS OF 10000 ROWS
-        "#,
-        ),
-        (
-            "Importing stop times",
-            r#"
-        LOAD CSV WITH HEADERS FROM 'file:///gtfs/stop_times.txt' AS row
-        CALL (row) {
-            MATCH (t:Trip {id: row.trip_id})
-            MATCH (s:Stop {id: row.stop_id})
-            // Use CREATE instead of MERGE since MERGE for relationships is very inefficient
-            CREATE (t)-[at:STOPS_AT {stop_sequence: toInteger(row.stop_sequence)}]->(s)
-            SET at.arrival_time = localtime(row.arrival_time),
-                at.departure_time = localtime(row.departure_time),
-                at.pickup_type = toInteger(row.pickup_type),
-                at.drop_off_type = toInteger(row.drop_off_type),
-                at.distance = row.shape_dist_traveled
-        } IN TRANSACTIONS OF 10000 ROWS
-        "#,
-        ),
+        // (
+        //     "Trips",
+        //     r#"
+        // LOAD CSV WITH HEADERS FROM 'file:///gtfs/trips.txt' AS row
+        // CALL (row) {
+        //     MATCH (r:Route {id: row.route_id})
+        //     MATCH (s:Service {id: row.service_id})
+        //     MERGE (t:Trip {id: row.trip_id})
+        //     SET t.headsign = row.trip_headsign,
+        //         t.direction = toInteger(row.direction_id),
+        //         t.block = row.block_id
+        //     MERGE (t)-[:PART_OF_ROUTE]->(r)
+        //     MERGE (t)-[:OPERATING_ON]->(s)
+        // } IN TRANSACTIONS OF 10000 ROWS
+        // "#,
+        // ),
+        // (
+        //     "Importing stop times",
+        //     r#"
+        // LOAD CSV WITH HEADERS FROM 'file:///gtfs/stop_times.txt' AS row
+        // CALL (row) {
+        //     MATCH (t:Trip {id: row.trip_id})
+        //     MATCH (s:Stop {id: row.stop_id})
+        //     // Use CREATE instead of MERGE since MERGE for relationships is very inefficient
+        //     CREATE (t)-[at:STOPS_AT {stop_sequence: toInteger(row.stop_sequence)}]->(s)
+        //     SET at.arrival_time = localtime(row.arrival_time),
+        //         at.departure_time = localtime(row.departure_time),
+        //         at.pickup_type = toInteger(row.pickup_type),
+        //         at.drop_off_type = toInteger(row.drop_off_type),
+        //         at.distance = row.shape_dist_traveled
+        // } IN TRANSACTIONS OF 10000 ROWS
+        // "#,
+        // ),
     ];
 
-    for (name, query_str) in csv_queries {
-        let query_task = graph.run(query(query_str));
-        let status_message = format!("Importing: {}", name);
+    for (name, query_str) in gtfs_csv_queries {
+        let query_task = graph.run(neo4rs::query(query_str));
+        let status_message = format!("Importing {}", name);
         run_task_with_spinner(query_task, status_message, &multi_progress).await
             .map_err(|e| ImportError::DataImport {
             name: name.to_string(),
@@ -223,20 +220,105 @@ pub async fn write_gtfs_into(graph: &Graph) -> Result<(), ImportError> {
         })?;
     }
 
-    outer_spinner.finish_with_message("\r✅  Imported GTFS data into Neo4j");
+    outer_spinner.finish_with_message("-- GTFS data imports ✔️");
     Ok(())
 }
 
-// fn run_task_with_spinner(query: &str, status_msg: &str) {
+pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError> {
+    let multi_progress = MultiProgress::new();
+    let outer_spinner = multi_progress.fork_spinner(300, "Importing Vienna city data into Neo4j ...".to_string());
+
+    let local_spinner = multi_progress.fork_spinner(150, "Creating indexes for subdistrict codes".to_string());
+    let index_queries = [
+        ("(s:SubDistrict)", "(s.district_num)"),
+        ("(s:SubDistrict)", "(s.sub_district_num)"),
+    ];
+    for (node, prop) in index_queries {
+        graph.run(neo4rs::query(&format!(
+            "CREATE INDEX IF NOT EXISTS FOR {} ON {}", node, prop)))
+            .await
+            .map_err(|e| ImportError::IndexCreation {
+                node: node.to_string(),
+                prop: prop.to_string(),
+                source: e,
+            })?;
+    }
+    local_spinner.finish_with_message("✅  Created indexes for subdistrict codes");
+
+    let city_csv_queries = [
+        (
+            "Importing population data",
+            r#"
+        LOAD CSV WITH HEADERS FROM 'file:///city/vienna_population.csv' AS row
+        FIELDTERMINATOR ';' // specify the custom delimiter
+        MERGE (s:SubDistrict {
+            district_num: toInteger(substring(row.DISTRICT_CODE, 1, 2)),
+            sub_district_num: toInteger(substring(row.SUB_DISTRICT_CODE, 3, 2))
+        })
+        SET s.population = toInteger(row.WHG_POP_TOTAL)
+        "#
+        ),
+        (
+            "Importing registration district names",
+            r#"
+        LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_names.csv' AS row
+        FIELDTERMINATOR ';' // specify the custom delimiter
+        MERGE (s:SubDistrict {
+            district_num: toInteger(substring(row.DISTRICT_CODE, 1, 2)),
+            sub_district_num: toInteger(substring(row.SUB_DISTRICT_CODE_VIE, 3, 2))
+          })
+          SET s.name = row.NAME_VIE
+        "#
+        ),
+        (
+            "Importing registration district coordinates",
+            r#"
+        LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_shapes.csv' AS row
+        MERGE (s:SubDistrict {
+            district_num: toInteger(row.BEZNR),
+            sub_district_num: toInteger(row.ZBEZNR)
+          })
+          SET s.area = toFloat(row.FLAECHE),
+              s.shape = row.SHAPE
+        "#
+        ),
+    ];
+
+    for (task_description, query_str) in city_csv_queries {
+        let query_task = graph.run(neo4rs::query(query_str));
+        run_task_with_spinner(query_task, task_description.to_string(), &multi_progress).await
+            .map_err(|e| ImportError::DataImport {
+                name: task_description.to_string(),
+                source: e,
+            })?;
+    }
+
+    outer_spinner.finish_with_message("-- Vienna city data imports ✔️");
+    Ok(())
+}
+
+
+trait SpinnerPool {
+    fn fork_spinner(&self, tick_millis: u64, start_message: String) -> ProgressBar;
+}
+
+impl SpinnerPool for MultiProgress {
+    fn fork_spinner(&self, tick_millis: u64, start_message: String) -> ProgressBar {
+        let spinner = self.add(ProgressBar::new_spinner());
+        spinner.enable_steady_tick(Duration::from_millis(tick_millis));
+        spinner.set_message(start_message);
+        spinner
+    }
+}
+
 async fn run_task_with_spinner<T, E>(
     task: impl Future<Output = Result<T, E>>,
     status_msg: String,
-    spinner_pool: &MultiProgress
+    spinner_pool: &dyn SpinnerPool
 ) -> Result<T, E>
 {
-    let spinner = spinner_pool.add(ProgressBar::new_spinner());
+    let spinner = spinner_pool.fork_spinner(150, status_msg.clone());
     //spinner.set_style(ProgressStyle::with_template("  {spinner} {msg}").unwrap_or(ProgressStyle::default_spinner()));
-    spinner.enable_steady_tick(Duration::from_millis(150));
 
     spinner.set_message(status_msg.clone());
     let start_time = Instant::now();
@@ -247,13 +329,6 @@ async fn run_task_with_spinner<T, E>(
     }
 
     result
-}
-
-fn fork_spinner(spinner_pool: &MultiProgress, tick_millis: u64, start_message: String) -> ProgressBar {
-    let spinner = spinner_pool.add(ProgressBar::new_spinner());
-    spinner.enable_steady_tick(Duration::from_millis(tick_millis));
-    spinner.set_message(start_message);
-    spinner
 }
 
 

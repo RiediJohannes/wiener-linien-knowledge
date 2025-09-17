@@ -1,6 +1,6 @@
 import marimo
 
-__generated_with = "0.15.2"
+__generated_with = "0.15.5"
 app = marimo.App(width="medium", app_title="", css_file="styles/notebook.css")
 
 
@@ -33,12 +33,6 @@ def _(mo):
     First, we need to load the data about Vienna's registration districts into our knowledge graph. This includes information about the registration districts' naming, their population and area, as well as their geographic coordinates.
     """
     )
-    return
-
-
-@app.cell
-def import_city_data(graph):
-    graph.import_city_data()
     return
 
 
@@ -1005,7 +999,7 @@ def _(graph, learning, prediction, testing, validation):
 
 @app.cell
 def _(mo):
-    mo.md(r"""Scoring potential subway connections between """)
+    mo.md(r"""Scoring potential subway connections between""")
     return
 
 

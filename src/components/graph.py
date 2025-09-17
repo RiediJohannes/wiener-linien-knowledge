@@ -10,55 +10,6 @@ AUTH = ("neo4j", "")
 driver = GraphDatabase.driver(URI, auth=AUTH)
 
 
-def import_city_data():
-    execute_operation("CREATE INDEX IF NOT EXISTS FOR (s:SubDistrict) ON (s.district_num);")
-    execute_operation("CREATE INDEX IF NOT EXISTS FOR (s:SubDistrict) ON (s.sub_district_num);")
-
-    operation = """
-    LOAD CSV WITH HEADERS FROM 'file:///city/vienna_population.csv' AS row
-    FIELDTERMINATOR ';' // specify the custom delimiter
-    MERGE (s:SubDistrict {
-        district_num: toInteger(substring(row.DISTRICT_CODE, 1, 2)),
-        sub_district_num: toInteger(substring(row.SUB_DISTRICT_CODE, 3, 2))
-      })
-      SET s.population = toInteger(row.WHG_POP_TOTAL)
-    """
-    summary = execute_operation(operation)
-    if summary is not None:
-        print(f"Successfully imported population data. Added {summary.counters.nodes_created} nodes.")
-    else:
-        return
-
-    operation = """
-    LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_names.csv' AS row
-    FIELDTERMINATOR ';' // specify the custom delimiter
-    MERGE (s:SubDistrict {
-        district_num: toInteger(substring(row.DISTRICT_CODE, 1, 2)),
-        sub_district_num: toInteger(substring(row.SUB_DISTRICT_CODE_VIE, 3, 2))
-      })
-      SET s.name = row.NAME_VIE
-    """
-    summary = execute_operation(operation)
-    if summary is not None:
-        print(f"Successfully imported registration district names. (Re)set {summary.counters.properties_set} properties.")
-    else:
-        return
-
-    operation = """
-    LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_shapes.csv' AS row
-    MERGE (s:SubDistrict {
-        district_num: toInteger(row.BEZNR),
-        sub_district_num: toInteger(row.ZBEZNR)
-      })
-      SET s.area = toFloat(row.FLAECHE),
-          s.shape = row.SHAPE
-    """
-    summary = execute_operation(operation)
-    if summary is not None:
-        print(f"Successfully imported registration district coordinates. (Re)set {summary.counters.properties_set} properties.")
-    else:
-        return
-
 def get_subdistricts() -> list[SubDistrict]:
     query = """
     MATCH (s:SubDistrict)

@@ -48,10 +48,10 @@ async fn main() {
         }
     }
 
-    match importer::write_gtfs_into(&graph).await {
-        Ok(_) => println!("Successfully initialized Neo4j database!"),
-        Err(e) => on_error(e)
-    };
+    _ = importer::write_gtfs_data_into(&graph).await.map_err(|e| on_error(e));
+    _ = importer::write_population_data_into(&graph).await.map_err(|e| on_error(e));
+
+    println!("\n\nSuccessfully initialized Neo4j database!");
 }
 
 fn on_error(err: impl std::fmt::Display) -> ! {
