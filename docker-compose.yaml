@@ -30,7 +30,7 @@ services:
       retries: 3               # Number of failures before unhealthy
 
   kg-initializer:
-    build: ./initializer  # Where to find build instructions if there is no initializer:latest container in the cache
+    build: ./initializer  # Where to find build instructions if there is no kg-initializer container in the cache
     depends_on:
       neo4j:
         condition: service_healthy

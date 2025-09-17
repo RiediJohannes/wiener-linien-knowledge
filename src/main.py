@@ -1003,12 +1003,10 @@ def _(graph, learning, prediction, testing, validation):
     return
 
 
-app._unparsable_cell(
-    r"""
-    Scoring potential subway connections between 
-    """,
-    name="_"
-)
+@app.cell
+def _(mo):
+    mo.md(r"""Scoring potential subway connections between """)
+    return
 
 
 @app.cell
@@ -1257,7 +1255,7 @@ def _(
     # In another cell - process the data
     def get_dynamic_stops_data():
         selection = main_selector.value
-    
+
         if selection == "all_stops":
             return graph.get_stops(with_clusters=True), "All Stops with Clusters"
         elif selection == "specific_stops":
@@ -1270,7 +1268,7 @@ def _(
             district = district_input.value
             subdistrict = subdistrict_input.value
             return graph.get_stops_for_subdistrict(district, subdistrict), f"District {district}, Subdistrict {subdistrict}"
-    
+
         return [], "No Data"
 
     _stops, _description = get_dynamic_stops_data()
@@ -1391,32 +1389,32 @@ def _(
     def get_selected_data():
         """Get data based on the currently selected tab and inputs"""
         active_tab = data_source_tabs.value
-    
+
         if active_tab == "All Stops":
             stops = graph.get_stops(with_clusters=True)
             description = "All Stops with Clusters"
-        
+
         elif active_tab == "Specific Stops":
             # Parse the comma-separated stop IDs
             stop_ids = [id.strip() for id in stop_ids_input.value.split(",") if id.strip()]
             stops = graph.get_stops(id_list=stop_ids)
             description = f"Specific Stops ({len(stop_ids)} requested)"
-        
+
         elif active_tab == "Stop Cluster":
             cluster_name = cluster_name_input.value.strip()
             stops = graph.get_stop_cluster(stop_name=cluster_name)
             description = f"Cluster: {cluster_name}"
-        
+
         elif active_tab == "District":
             district = district_input.value
             subdistrict = subdistrict_input.value
             stops = graph.get_stops_for_subdistrict(district, subdistrict)
             description = f"District {district}, Subdistrict {subdistrict}"
-        
+
         else:
             stops = []
             description = "No data selected"
-    
+
         return stops, description
 
     # Get the data

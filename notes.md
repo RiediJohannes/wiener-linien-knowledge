@@ -66,7 +66,9 @@ They were particularly fond of:
   - 17:30-20:30
   - 22:30-2:30
 - 16.9.
-  - 16:30-
+  - 16:30-22:00
+- 17.9.
+  - 14:00-
 
 ## Submission
 
