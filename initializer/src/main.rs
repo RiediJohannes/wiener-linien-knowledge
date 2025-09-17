@@ -27,31 +27,46 @@ async fn main() {
         .await
         .expect("Failed to connect to Neo4j instance");
 
+
     // Check if the database already contains some GTFS data and conditionally abort the import
-    let db_is_empty: bool = importer::is_database_empty(&graph).await.unwrap_or_else(|e| on_error(e));
-    if !db_is_empty {
-        if abort_flag {
-            println!("GTFS data already present -> aborting import to prevent inconsistent data (--abort-if-present).");
-            std::process::exit(0);
-        } else if force_flag {
-            println!("GTFS data already present, but proceeding with import (--force).");
-        } else {
-            println!(
-                "Warning: Your Neo4j instance already contains some GTFS data. Importing the GTFS data might lead to inconsistent data."
-            );
-            let confirmation = Confirm::new()
-                .with_prompt("Do you want to continue? (y/n)")
-                .interact();
-            if confirmation.is_err() || !confirmation.unwrap() {
-                std::process::exit(0);
-            }
+    let db_contains_gtfs: bool = importer::db_contains_gtfs_data(&graph).await
+        .unwrap_or_else(|e| on_error(e));
+
+    let should_import_gtfs = match (db_contains_gtfs, abort_flag, force_flag) {
+        (false, _, _) => true,
+        (true, true, _) => {
+            println!("  GTFS data already present ✔️");
+            false
         }
+        (true, _, true) => {
+            println!("GTFS data already present, but proceeding nonetheless (--force).");
+            true
+        }
+        (true, _, _) => {
+            println!(
+                "Warning: Your Neo4j instance already contains some GTFS data. Importing might lead to inconsistent data."
+            );
+            Confirm::new()
+                .with_prompt("Do you want to continue? (y/n)")
+                .interact()
+                .unwrap_or(false)
+        }
+    };
+
+    if should_import_gtfs {
+        _ = importer::write_gtfs_data_into(&graph).await.map_err(|e| on_error(e));
     }
 
-    _ = importer::write_gtfs_data_into(&graph).await.map_err(|e| on_error(e));
-    _ = importer::write_population_data_into(&graph).await.map_err(|e| on_error(e));
+    let db_contains_city_data = importer::db_contains_city_data(&graph).await
+        .unwrap_or_else(|e| on_error(e));
 
-    println!("\n\nSuccessfully initialized Neo4j database!");
+    if !db_contains_city_data || force_flag {
+        _ = importer::write_population_data_into(&graph).await.map_err(|e| on_error(e));
+    } else {
+        println!("  City data already present ✔️");
+    }
+
+    println!("\n=== Successfully initialized Neo4j database! ===");
 }
 
 fn on_error(err: impl std::fmt::Display) -> ! {

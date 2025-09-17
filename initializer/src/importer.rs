@@ -1,5 +1,5 @@
 use indicatif::{HumanDuration, MultiProgress, ProgressBar};
-use neo4rs::{Graph};
+use neo4rs::Graph;
 use path::PathBuf;
 use std::time::Duration;
 use std::{fs, path};
@@ -39,7 +39,7 @@ pub enum ImportError {
 }
 
 
-pub async fn is_database_empty(graph: &Graph) -> Result<bool, ImportError> {
+pub async fn db_contains_gtfs_data(graph: &Graph) -> Result<bool, ImportError> {
     // Ask the database to return '1' if there is ANY GTFS node and check if we received something
     let mut result = graph.execute(neo4rs::query(r#"
         MATCH (n)
@@ -49,11 +49,28 @@ pub async fn is_database_empty(graph: &Graph) -> Result<bool, ImportError> {
     "#)).await?;
 
     match result.next().await {
-        Ok(Some(_)) => Ok(false), // DB already contains some GTFS data
-        Ok(None) => Ok(true), // DB contains no GTFS data
+        Ok(Some(_)) => Ok(true), // DB already contains some GTFS data
+        Ok(None) => Ok(false), // DB contains no GTFS data
         Err(e) => Err(ImportError::Connection(e))
     }
 }
+
+pub async fn db_contains_city_data(graph: &Graph) -> Result<bool, ImportError> {
+    // Ask the database to return '1' if there is ANY Subdistrict node and check if we received something
+    let mut result = graph.execute(neo4rs::query(r#"
+        MATCH (n)
+        WHERE n:SubDistrict
+        LIMIT 1
+        RETURN 1
+    "#)).await?;
+
+    match result.next().await {
+        Ok(Some(_)) => Ok(true),
+        Ok(None) => Ok(false),
+        Err(e) => Err(ImportError::Connection(e))
+    }
+}
+
 
 /// Writes the data from the GTFS files placed in the `/gtfs` directory into the given
 /// neo4j graph instance.
@@ -62,7 +79,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
     let outer_spinner = multi_progress.fork_spinner(300, "Importing GTFS data into Neo4j ...".to_string());
 
     // Note: Uniqueness constraints implicitly create indexes
-    let local_spinner = multi_progress.fork_spinner(150, "Creating uniqueness constraints for GTFS node types".to_string());
+    let local_spinner = multi_progress.fork_spinner(100, "Creating uniqueness constraints for GTFS node types".to_string());
     let uniqueness_constraints = [
         ("(r:Route)",   "r.id"),
         ("(s:Service)", "s.id"),
@@ -81,7 +98,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
     }
     local_spinner.finish_with_message("✅  Created uniqueness constraints for GTFS node types");
 
-    let local_spinner = multi_progress.fork_spinner(150, "Creating indexes for GTFS node types".to_string());
+    let local_spinner = multi_progress.fork_spinner(100, "Creating indexes for GTFS node types".to_string());
     let index_queries = [
         ("(ex:ServiceException)", "(ex.service_id)"),
         ("(s:Stop)", "(s.lon)"),
@@ -103,7 +120,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
 
     let gtfs_csv_queries = [
         (
-            "Agencies",
+            "agencies",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/agency.txt' AS row
         MERGE (a:Agency {id: row.agency_id})
@@ -112,7 +129,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         "#,
         ),
         (
-            "Stops",
+            "stops",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/stops.txt' AS row
         MERGE (s:Stop {id: row.stop_id})
@@ -122,7 +139,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         "#,
         ),
         (
-            "Routes",
+            "routes",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/routes.txt' AS row
         MATCH (a:Agency {id: row.agency_id})
@@ -135,7 +152,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         "#,
         ),
         (
-            "Services",
+            "services",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/calendar.txt' AS row
         MERGE (s:Service {id: row.service_id})
@@ -159,7 +176,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         "#,
         ),
         (
-            "Service exceptions",
+            "service exceptions",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///gtfs/calendar_dates.txt' AS row
         MATCH (s:Service {id: row.service_id})
@@ -176,7 +193,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         "#,
         ),
         // (
-        //     "Trips",
+        //     "trips",
         //     r#"
         // LOAD CSV WITH HEADERS FROM 'file:///gtfs/trips.txt' AS row
         // CALL (row) {
@@ -192,7 +209,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         // "#,
         // ),
         // (
-        //     "Importing stop times",
+        //     "stop times",
         //     r#"
         // LOAD CSV WITH HEADERS FROM 'file:///gtfs/stop_times.txt' AS row
         // CALL (row) {
@@ -228,7 +245,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
     let multi_progress = MultiProgress::new();
     let outer_spinner = multi_progress.fork_spinner(300, "Importing Vienna city data into Neo4j ...".to_string());
 
-    let local_spinner = multi_progress.fork_spinner(150, "Creating indexes for subdistrict codes".to_string());
+    let local_spinner = multi_progress.fork_spinner(100, "Creating indexes for subdistrict codes".to_string());
     let index_queries = [
         ("(s:SubDistrict)", "(s.district_num)"),
         ("(s:SubDistrict)", "(s.sub_district_num)"),
@@ -247,7 +264,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
 
     let city_csv_queries = [
         (
-            "Importing population data",
+            "population data",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///city/vienna_population.csv' AS row
         FIELDTERMINATOR ';' // specify the custom delimiter
@@ -259,7 +276,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
         "#
         ),
         (
-            "Importing registration district names",
+            "registration district names",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_names.csv' AS row
         FIELDTERMINATOR ';' // specify the custom delimiter
@@ -271,7 +288,7 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
         "#
         ),
         (
-            "Importing registration district coordinates",
+            "registration district coordinates",
             r#"
         LOAD CSV WITH HEADERS FROM 'file:///city/registration_districts_shapes.csv' AS row
         MERGE (s:SubDistrict {
@@ -294,6 +311,8 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
     }
 
     outer_spinner.finish_with_message("-- Vienna city data imports ✔️");
+    print!("\r\n");
+
     Ok(())
 }
 
@@ -317,7 +336,7 @@ async fn run_task_with_spinner<T, E>(
     spinner_pool: &dyn SpinnerPool
 ) -> Result<T, E>
 {
-    let spinner = spinner_pool.fork_spinner(150, status_msg.clone());
+    let spinner = spinner_pool.fork_spinner(100, status_msg.clone());
     //spinner.set_style(ProgressStyle::with_template("  {spinner} {msg}").unwrap_or(ProgressStyle::default_spinner()));
 
     spinner.set_message(status_msg.clone());
