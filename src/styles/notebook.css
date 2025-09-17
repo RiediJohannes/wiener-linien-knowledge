@@ -35,6 +35,10 @@ blockquote .arithmatex {
   line-height: 1.3em;
 }
 
+pre {
+    font-size: 1rem !important;
+}
+
 /* Affect only inline code */
 .markdown code:not(pre code) {
     border-radius: 5px;

@@ -34,7 +34,9 @@ def _(mo):
         r"""
     # The Knowledge Graph
 
-    If you started this project as instructed (using docker compose), you should already have a running instance of the **Neo4j graph database** filled with (or currently being filled with) **geographic and demographic data** about the city of Vienna as well as a vast dataset of the city's **public transport schedule** for 2025. This data has been mapped from various CSV files into a graph structure.
+    If you started this project as instructed (using docker compose), you should already have a running instance of the **Neo4j graph database** filled with (or currently being filled with) **geographic and demographic data** about the city of Vienna as well as a vast dataset of the city's **public transport schedule** for 2025.
+
+    In particular, the initial data encompasses a general transit feed specification (GTFS) dataset by Wiener Linien GmbH & Co KG that accurately describes all public transport operations by Wiener Linien from 15.12.2024 to 13.12.2025. Additionally, the database contains rich information about Vienna's registration districts (subdistricts), which includes the subdistricts' naming, their population and area, as well as their geographic coordinates. This collection of data has been mapped from various CSV files (7 files for GTFS, 3 files for the subdistricts) into a graph structure.
 
     You can check the availability and status of the knowledge graph below:
     """
@@ -42,7 +44,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(graph, mo, print_raw):
     _labels = [
         ("Agencies", "agencies"), 
@@ -81,20 +83,20 @@ def _(graph, mo, print_raw):
     def _update_graph_status(_event):
         _kg_available = graph.is_available()
         _availability_text = "✅ Graph database is available" if _kg_available else "❌ Graph database is currently not available"
-        _status_header = mo.hstack([_availability_text, graph_status_refresh])
+        _status_header = mo.hstack([mo.plain_text(_availability_text), graph_status_refresh])
         mo.output.append(_status_header)
-    
+
         if _kg_available:
-            mo.output.append("Verifying GTFS data presence:")
+            print_raw("Verifying GTFS data presence:")
             _node_counts = graph.execute_query(_node_count_query)[0]
             for name, key in _labels:
                 _count = _node_counts[key] if key in _node_counts.keys() else 0
                 print_raw(f"\t✅ {name}: {_count}" if _count > 0 else f"\t❌ No {name.lower()}")
-    
+
             _stop_times = graph.execute_query(_stop_times_query)
             print_raw(f"\t✅ Stop times: {_stop_times[0]["count"]}" if _stop_times else f"\t❌ No stop times")
-        
-            mo.output.append("Verifying geographic/demographic data presence:")
+
+            print_raw("Verifying geographic/demographic data presence:")
             _count = _node_counts["subdistricts"] if key in _node_counts.keys() else 0
             print_raw(f"\t✅ Subdistricts: {_count}" if _count > 0 else f"\t❌ No subdistricts")
             _city_data = graph.execute_query(_city_data_query)[0]
