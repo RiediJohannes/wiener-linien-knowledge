@@ -7,11 +7,12 @@
   --marimo-text-font: 'Atkinson Hyperlegible', 'PT Sans', sans-serif;
 }
 
-.markdown .paragraph {
+.markdown .paragraph,
+.markdown ul,
+.markdown ol {
   font-size: 1.2rem;
   line-height: 1.7rem;
   margin-block-end: 1.5rem;
-  /*color: light-dark(navy, pink);*/
 }
 
 .markdown .paragraph:has(+ blockquote) {

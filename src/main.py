@@ -36,7 +36,7 @@ def _(mo):
 
     If you started this project as instructed (using docker compose), you should already have a running instance of the **Neo4j graph database** filled with (or currently being filled with) **geographic and demographic data** about the city of Vienna as well as a vast dataset of the city's **public transport schedule** for 2025.
 
-    In particular, the initial data encompasses a general transit feed specification (GTFS) dataset by Wiener Linien GmbH & Co KG that accurately describes all public transport operations by Wiener Linien from 15.12.2024 to 13.12.2025. Additionally, the database contains rich information about Vienna's registration districts (subdistricts), which includes the subdistricts' naming, their population and area, as well as their geographic coordinates. This collection of data has been mapped from various CSV files (7 files for GTFS, 3 files for the subdistricts) into a graph structure.
+    In particular, the initial data encompasses a general transit feed specification (GTFS) dataset by Wiener Linien GmbH & Co KG that accurately describes all public transport operations by Wiener Linien from 15.12.2024 to 13.12.2025. Additionally, the database contains rich information about Vienna's registration districts (subdistricts), which includes the subdistricts' naming, their population and area, as well as their geographic coordinates. This collection of data has been mapped from various CSV files (7 files for GTFS, 3 files for the subdistricts) into a graph structure to form the **Wiener Linien Knowledge Graph**.
 
     You can check the availability and status of the knowledge graph below:
     """
@@ -111,17 +111,6 @@ def _(graph, mo, print_raw):
     )
 
     _update_graph_status(None)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    # Creating the knowledge graph
-    First, we need to load the data about Vienna's registration districts into our knowledge graph. This includes information about the registration districts' naming, their population and area, as well as their geographic coordinates.
-    """
-    )
     return
 
 
@@ -419,6 +408,185 @@ def _(graph, operation_cluster_position):
     print("Calculating the average position")
     _summary = graph.execute_operation(operation_cluster_position)
     print(f"Set {_summary.counters.properties_set} properties")
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### Exploring Stop Clusters
+
+    The following interactive map displays all stops we parsed from the GTFS data as well as the clusters we formed from geographically close stops. You can also explore which stops are considered nearby a specific subdistrict.
+    """
+    )
+    return
+
+
+@app.cell
+def _(graph, mo):
+    # Foreground: Create the user inputs such that the user can select what data to show on the map
+
+    # Function to retrieve the available subdistricts for a given district
+    def get_subdistricts_per_district():
+        subdistrict_query = """
+        MATCH (s:SubDistrict)
+        WITH s.district_num as dist, s.sub_district_num as subdist
+        ORDER BY dist, subdist
+        RETURN dist as district, collect(subdist) as subdistricts
+        """
+    
+        result = graph.execute_query(subdistrict_query)
+    
+        # Convert to dictionary
+        district_mapping = {}
+        for record in result:
+            district = record['district']
+            subdistricts = sorted(record['subdistricts'])
+            district_mapping[district] = subdistricts
+    
+        return district_mapping
+
+    # Create UI elements for each tab
+    stops_map_stop_input_1 = mo.ui.text_area(
+        value="at:49:1000:0:1,at:49:1081:0:1",
+        label="Enter stop IDs (comma-separated):",
+        placeholder="at:49:1000:0:1,at:49:1081:0:1"
+    )
+
+    stops_map_stop_input_2 = mo.ui.text_area(
+        value="at:49:1000:0:1,at:49:1081:0:1",
+        label="Enter stop IDs (comma-separated):",
+        placeholder="at:49:1000:0:1,at:49:1081:0:1"
+    )
+
+    subdistricts_per_dist = get_subdistricts_per_district()
+    stops_map_district_num_combobox = mo.ui.dropdown(
+        options=sorted(subdistricts_per_dist.keys()),
+        value=1,
+        label="District:"
+    )
+    return (
+        stops_map_district_num_combobox,
+        stops_map_stop_input_1,
+        stops_map_stop_input_2,
+        subdistricts_per_dist,
+    )
+
+
+@app.cell
+def _(
+    mo,
+    stops_map_district_num_combobox,
+    stops_map_stop_input_1,
+    stops_map_stop_input_2,
+    subdistricts_per_dist,
+):
+    _available_subdistricts = subdistricts_per_dist.get(stops_map_district_num_combobox.value, [1])
+    stops_map_subdistrict_num_combobox = mo.ui.dropdown(
+        options=_available_subdistricts,
+        value=1,
+        label="Subdistrict:"
+    )
+
+    # Create the tabbed interface
+    stops_map_tabs = mo.ui.tabs({
+        "All Stops": mo.vstack([
+            mo.md("**All Stops with Clusters**"),
+            mo.md("Shows all transit stops in Vienna as well as the clusters we built from them.")
+        ]),
+        "Specific Stops": mo.vstack([
+            mo.md("**View Specific Stops**"),
+            stops_map_stop_input_1,
+            stops_map_stop_input_2
+        ]),
+        "Specific Cluster": mo.vstack([
+            mo.md("**View a Specific Stop Cluster**"),
+            stops_map_stop_input_1,
+            mo.md("*Find all stops belonging to the same cluster as a given station*")
+        ]),
+        "Near Subdistrict": mo.vstack([
+            mo.md("**Stops by District/Subdistrict**"),
+            mo.hstack([stops_map_district_num_combobox, stops_map_subdistrict_num_combobox], justify="start", gap=1.5),
+            mo.md("*Vienna has 23 districts, split further into a total of 250 subdistricts*")
+        ])
+    })
+
+    # Display the tabs
+    stops_map_tabs
+    return stops_map_subdistrict_num_combobox, stops_map_tabs
+
+
+@app.cell
+def _(
+    graph,
+    mo,
+    present,
+    stops_map_district_num_combobox,
+    stops_map_stop_input_1,
+    stops_map_stop_input_2,
+    stops_map_subdistrict_num_combobox,
+    stops_map_tabs,
+):
+    # Behind the scenes: Query the respective data based on the user-selection
+
+    def stops_map_get_data():
+        active_tab = stops_map_tabs.value
+
+        if active_tab == "All Stops":
+            stops = graph.get_stops(with_clusters=True)
+            description = "All Stops with Clusters"
+        elif active_tab == "Specific Stops":
+            # Parse the comma-separated stop IDs
+            stop_ids = [stops_map_stop_input_1.value.strip(), stops_map_stop_input_2.value.strip()]
+            stops = graph.get_stops(id_list=stop_ids)
+            description = f"Specific Stops ({len(stop_ids)} requested)"
+        elif active_tab == "Stop Cluster":
+            cluster_name = stops_map_stop_input_1.value.strip()
+            stops = graph.get_stop_cluster(stop_name=cluster_name)
+            description = f"Cluster: {cluster_name}"
+        elif active_tab == "Near Subdistrict":
+            district = stops_map_district_num_combobox.value
+            subdistrict = stops_map_subdistrict_num_combobox.value
+            stops = graph.get_stops_for_subdistrict(district, subdistrict)
+            description = f"District {district}, Subdistrict {subdistrict}"
+        else:
+            stops = []
+            description = "No data selected"
+
+        return stops, description
+
+
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
+
+    # Add the stops to the map
+    _stops, _description = stops_map_get_data()
+    _transport_map.add_stops(_stops)
+
+    # Display the results
+    _heading = mo.md(f"### **{_description}** ({len(_stops)} stops)")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+
+    mo.vstack([_heading, _iframe])
+    return
+
+
+@app.cell
+def _(graph, mo, present):
+    _stops = graph.get_stops(with_clusters=True)
+    #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
+    #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
+    #_stops = graph.get_stops_for_subdistrict(11, 2)
+
+    # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
+    # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
+    _transport_map.add_stops(_stops)
+
+    # Visible output
+    _heading = mo.md("### **Explore stop locations and clusters**")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+    mo.vstack([_heading, _iframe])
     return
 
 
@@ -792,6 +960,63 @@ def _(graph):
 
 @app.cell(hide_code=True)
 def _(mo):
+    mo.md(r"""# Explore current data""")
+    return
+
+
+@app.cell
+def _(graph, mo, present):
+    _nodes = graph.get_stops(with_clusters=True, only_in_use=True)
+
+    _connections_query = """
+    MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
+    WHERE s.id < t.id AND c.yearly > 4 * 365
+    RETURN DISTINCT s as from, t as to, type(c) as label
+    """
+    _connections = graph.get_connections(_connections_query)
+
+    _connections_query = """
+    MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
+    WHERE s1.id < s2.id AND conn.yearly > 4 * 365
+    WITH conn, s1, s2,
+      CASE 
+        WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
+        WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
+        WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
+        WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
+        WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
+        ELSE 'RARELY_TO'
+      END as level_of_service
+    RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
+    """
+    #_connections = graph.get_connections(_connections_query)
+
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
+                                          visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
+    _transport_map.add_transit_nodes(_nodes)
+    _transport_map.add_transit_connections(_connections)
+
+    # Visible output
+    _heading = mo.md("### **Explore transit connections**")
+    _iframe = mo.iframe(_transport_map.as_html(), height=650)
+    mo.vstack([_heading, _iframe])
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
+    # Knowledge Graph Embeddings
+
+    Now, we are ready for this project's main goal, which is predicting missing connections in Vienna's public transport network. As the wording suggests, this becomes a classic **link prediction problem** in our knowledge graph. A key tool to tackle such problems are knowledge graph embeddings. In this chapter, we will use the popular KG embedding library **PyKEEN**.
+    """
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
     triples_queries = {
     "Existing transit connections": """
     // Existing transit connections
@@ -868,12 +1093,7 @@ def _(mo):
     RETURN s1.id as head, level_of_service as rel, s2.id as tail"""
     }
 
-    mo.md(
-        f"""
-    # Knowledge Graph Embeddings
-
-    Now, we are ready for this project's main goal, which is predicting missing connections in Vienna's public transport network. As the wording suggests, this becomes a classic **link prediction problem** in our knowledge graph. A key tool to tackle such problems are knowledge graph embeddings. In this chapter, we will use the popular KG embedding library **PyKEEN**.
-
+    mo.md(f"""
     ## Training Triples Generation
 
     Since link prediction works on the basis of **triples** of the form $(h,r,t)$ ($h:$ head, $r:$ relation, $t:$ tail), we need to derive and extract meaningful triples from our knowledge graph. This training data should include all reasonable information about the domain that is considered relevant for planning new transport connections between existing stops.
@@ -1099,64 +1319,6 @@ def _(learning, prediction, testing, validation):
     _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
     _prediction_dataframe = _pred.predict_component(head="at:49:1530:0:4", rel="TRAM_CONNECTS_TO").sort_values(by=['score'], ascending=True)
     _prediction_dataframe["tail_label"].tolist()
-    return
-
-
-@app.cell
-def _(graph, mo, present):
-    _stops = graph.get_stops(with_clusters=True)
-    #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
-    #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
-    #_stops = graph.get_stops_for_subdistrict(11, 2)
-
-    # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
-    # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
-    _transport_map.add_stops(_stops)
-
-    # Visible output
-    _heading = mo.md("### **Explore stop locations and clusters**")
-    _iframe = mo.iframe(_transport_map.as_html(), height=650)
-    mo.vstack([_heading, _iframe])
-    return
-
-
-@app.cell
-def _(graph, mo, present):
-    _nodes = graph.get_stops(with_clusters=True, only_in_use=True)
-
-    _connections_query = """
-    MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
-    WHERE s.id < t.id AND c.yearly > 4 * 365
-    RETURN DISTINCT s as from, t as to, type(c) as label
-    """
-    _connections = graph.get_connections(_connections_query)
-
-    _connections_query = """
-    MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
-    WHERE s1.id < s2.id AND conn.yearly > 4 * 365
-    WITH conn, s1, s2,
-      CASE 
-        WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
-        WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
-        WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
-        WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
-        WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
-        ELSE 'RARELY_TO'
-      END as level_of_service
-    RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
-    """
-    #_connections = graph.get_connections(_connections_query)
-
-    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
-                                          visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
-    _transport_map.add_transit_nodes(_nodes)
-    _transport_map.add_transit_connections(_connections)
-
-    # Visible output
-    _heading = mo.md("### **Explore transit connections**")
-    _iframe = mo.iframe(_transport_map.as_html(), height=650)
-    mo.vstack([_heading, _iframe])
     return
 
 
