@@ -435,147 +435,169 @@ def _(graph, mo):
         ORDER BY dist, subdist
         RETURN dist as district, collect(subdist) as subdistricts
         """
-    
+
         result = graph.execute_query(subdistrict_query)
-    
+
         # Convert to dictionary
         district_mapping = {}
         for record in result:
             district = record['district']
             subdistricts = sorted(record['subdistricts'])
             district_mapping[district] = subdistricts
-    
+
         return district_mapping
 
     # Create UI elements for each tab
-    stops_map_stop_input_1 = mo.ui.text_area(
-        value="at:49:1000:0:1,at:49:1081:0:1",
-        label="Enter stop IDs (comma-separated):",
-        placeholder="at:49:1000:0:1,at:49:1081:0:1"
+    stops_map_stop_list_input = mo.ui.text_area(
+        rows=1,
+        placeholder="at:49:1000:0:1, Karlsplatz, ..."
     )
 
-    stops_map_stop_input_2 = mo.ui.text_area(
-        value="at:49:1000:0:1,at:49:1081:0:1",
-        label="Enter stop IDs (comma-separated):",
-        placeholder="at:49:1000:0:1,at:49:1081:0:1"
+    stops_map_stop_input = mo.ui.text(
+        label="Enter a single stop ID/name: ",
+        placeholder="Karlsplatz"
     )
 
     subdistricts_per_dist = get_subdistricts_per_district()
     stops_map_district_num_combobox = mo.ui.dropdown(
         options=sorted(subdistricts_per_dist.keys()),
-        value=1,
         label="District:"
     )
     return (
         stops_map_district_num_combobox,
-        stops_map_stop_input_1,
-        stops_map_stop_input_2,
+        stops_map_stop_input,
+        stops_map_stop_list_input,
         subdistricts_per_dist,
     )
 
 
 @app.cell
-def _(
-    mo,
-    stops_map_district_num_combobox,
-    stops_map_stop_input_1,
-    stops_map_stop_input_2,
-    subdistricts_per_dist,
-):
+def _(mo, stops_map_district_num_combobox, subdistricts_per_dist):
     _available_subdistricts = subdistricts_per_dist.get(stops_map_district_num_combobox.value, [1])
     stops_map_subdistrict_num_combobox = mo.ui.dropdown(
         options=_available_subdistricts,
-        value=1,
         label="Subdistrict:"
     )
+    return (stops_map_subdistrict_num_combobox,)
 
-    # Create the tabbed interface
-    stops_map_tabs = mo.ui.tabs({
-        "All Stops": mo.vstack([
-            mo.md("**All Stops with Clusters**"),
-            mo.md("Shows all transit stops in Vienna as well as the clusters we built from them.")
-        ]),
-        "Specific Stops": mo.vstack([
-            mo.md("**View Specific Stops**"),
-            stops_map_stop_input_1,
-            stops_map_stop_input_2
-        ]),
-        "Specific Cluster": mo.vstack([
-            mo.md("**View a Specific Stop Cluster**"),
-            stops_map_stop_input_1,
-            mo.md("*Find all stops belonging to the same cluster as a given station*")
-        ]),
-        "Near Subdistrict": mo.vstack([
-            mo.md("**Stops by District/Subdistrict**"),
-            mo.hstack([stops_map_district_num_combobox, stops_map_subdistrict_num_combobox], justify="start", gap=1.5),
-            mo.md("*Vienna has 23 districts, split further into a total of 250 subdistricts*")
-        ])
-    })
 
-    # Display the tabs
-    stops_map_tabs
-    return stops_map_subdistrict_num_combobox, stops_map_tabs
+@app.cell
+def _(mo):
+    stops_map_search_button = mo.ui.run_button(
+        kind="success",
+        label="Search"
+    )
+    return (stops_map_search_button,)
 
 
 @app.cell
 def _(
-    graph,
     mo,
-    present,
     stops_map_district_num_combobox,
-    stops_map_stop_input_1,
-    stops_map_stop_input_2,
+    stops_map_stop_input,
+    stops_map_stop_list_input,
+    stops_map_subdistrict_num_combobox,
+):
+    # Create the tabbed interface
+    stops_map_tabs = mo.ui.tabs({
+        "All Stops": mo.vstack([
+            mo.md("**All Stops with Clusters**"),
+            mo.md("""_Shows all transit stops in Vienna as well as the clusters we built  
+            from them._"""),
+        ]),
+        "Specific Stops": mo.vstack([
+            mo.md("**View Specific Stops**"),
+            mo.md("Enter a list of stop IDs or names (comma-separated):"),
+            stops_map_stop_list_input,
+        ]),
+        "Specific Cluster": mo.vstack([
+            mo.md("**View a Specific Stop Cluster**"),
+            mo.md("*Find all stops belonging to the same cluster as a given station.*"),
+            stops_map_stop_input,
+        ]),
+        "Near Subdistrict": mo.vstack([
+            mo.md("**Stops by District/Subdistrict**"),
+            mo.md("*Vienna has 23 districts, split further into a total of 250 subdistricts.*"),
+            mo.hstack([stops_map_district_num_combobox, stops_map_subdistrict_num_combobox], justify="start", gap=1.5),
+        ])
+    })
+    return (stops_map_tabs,)
+
+
+@app.cell
+def _(mo, stops_map_search_button, stops_map_tabs):
+    print(stops_map_tabs.value)
+
+    # Display the tabs
+    mo.hstack([stops_map_tabs, stops_map_search_button], justify="start", gap=2)
+    return
+
+
+@app.cell(hide_code=True)
+def _(
+    graph,
+    stops_map_district_num_combobox,
+    stops_map_stop_input,
+    stops_map_stop_list_input,
     stops_map_subdistrict_num_combobox,
     stops_map_tabs,
 ):
     # Behind the scenes: Query the respective data based on the user-selection
-
     def stops_map_get_data():
         active_tab = stops_map_tabs.value
+        stops = []
+        description = "No data selected"
 
         if active_tab == "All Stops":
             stops = graph.get_stops(with_clusters=True)
             description = "All Stops with Clusters"
         elif active_tab == "Specific Stops":
             # Parse the comma-separated stop IDs
-            stop_ids = [stops_map_stop_input_1.value.strip(), stops_map_stop_input_2.value.strip()]
-            stops = graph.get_stops(id_list=stop_ids)
-            description = f"Specific Stops ({len(stop_ids)} requested)"
-        elif active_tab == "Stop Cluster":
-            cluster_name = stops_map_stop_input_1.value.strip()
-            stops = graph.get_stop_cluster(stop_name=cluster_name)
-            description = f"Cluster: {cluster_name}"
+            stop_inputs = [input.strip() for input in stops_map_stop_list_input.value.split(',') if len(input.strip()) > 0]
+            if stop_inputs:
+                stops = graph.get_stops(id_list=stop_inputs, name_list=stop_inputs) # Check inputs both for ID and name matches
+                description = f"Specific Stops ({len(stops)} requested)"
+        elif active_tab == "Specific Cluster":
+            stop_identifier = stops_map_stop_input.value.strip()
+            if stop_identifier:
+                stops = graph.get_stop_cluster(stop_identifier)
+                description = f"Found {len(stops)} stop(s) in {sum(1 for node in stops if node.is_root)} cluster(s)"
         elif active_tab == "Near Subdistrict":
             district = stops_map_district_num_combobox.value
             subdistrict = stops_map_subdistrict_num_combobox.value
             stops = graph.get_stops_for_subdistrict(district, subdistrict)
             description = f"District {district}, Subdistrict {subdistrict}"
-        else:
-            stops = []
-            description = "No data selected"
 
         return stops, description
 
+    #stops_map_tabs.value
+    return (stops_map_get_data,)
 
+
+@app.cell
+def _(mo, present, stops_map_get_data, stops_map_search_button):
     _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
 
+    _stack = [mo.md(f"**Press 'Search' to run query**")]
     # Add the stops to the map
-    _stops, _description = stops_map_get_data()
-    _transport_map.add_stops(_stops)
+    if (stops_map_search_button.value):
+        _stops, _description = stops_map_get_data()
+        _transport_map.add_stops(_stops)
+        _heading = mo.md(f"### **{_description}**")
 
-    # Display the results
-    _heading = mo.md(f"### **{_description}** ({len(_stops)} stops)")
-    _iframe = mo.iframe(_transport_map.as_html(), height=650)
-
-    mo.vstack([_heading, _iframe])
+        # Display the results
+        _iframe = mo.iframe(_transport_map.as_html(), height=650)
+        _stack = [_heading, _iframe]
+    
+    mo.vstack(_stack)
     return
 
 
 @app.cell
 def _(graph, mo, present):
-    _stops = graph.get_stops(with_clusters=True)
+    _stops = graph.get_stops(with_clusters=True, id_list=["at:49:1000:0:1"], name_list=['Marx'])
     #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
-    #_stops = graph.get_stop_cluster(stop_name='Valiergasse')
+    #_stops = graph.get_stop_cluster('Valiergasse')
     #_stops = graph.get_stops_for_subdistrict(11, 2)
 
     # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
@@ -1334,7 +1356,7 @@ def _(graph, mo, present):
     data_sources = {
         "All stops (with clusters)": lambda: graph.get_stops(with_clusters=True),
         "Specific stops": lambda: graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"]),
-        "Cluster: Valiergasse": lambda: graph.get_stop_cluster(stop_name='Valiergasse'),
+        "Cluster: Valiergasse": lambda: graph.get_stop_cluster('Valiergasse'),
         "Subdistrict 11.2": lambda: graph.get_stops_for_subdistrict(11, 2),
     }
 
@@ -1399,7 +1421,7 @@ def _(data_source_selector, graph, mo, present):
         elif selection == "specific_stops":
             return graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
         elif selection == "valiergasse_cluster":
-            return graph.get_stop_cluster(stop_name='Valiergasse')
+            return graph.get_stop_cluster('Valiergasse')
         elif selection == "district_11_2":
             return graph.get_stops_for_subdistrict(11, 2)
         else:
@@ -1508,7 +1530,7 @@ def _(
             return graph.get_stops(id_list=ids), f"Specific Stops ({len(ids)} IDs)"
         elif selection == "stop_cluster":
             name = cluster_name_input.value
-            return graph.get_stop_cluster(stop_name=name), f"Cluster: {name}"
+            return graph.get_stop_cluster(name), f"Cluster: {name}"
         elif selection == "subdistrict":
             district = district_input.value
             subdistrict = subdistrict_input.value
@@ -1647,7 +1669,7 @@ def _(
 
         elif active_tab == "Stop Cluster":
             cluster_name = cluster_name_input.value.strip()
-            stops = graph.get_stop_cluster(stop_name=cluster_name)
+            stops = graph.get_stop_cluster(cluster_name)
             description = f"Cluster: {cluster_name}"
 
         elif active_tab == "District":

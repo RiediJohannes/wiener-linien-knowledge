@@ -23,6 +23,24 @@
   margin-bottom: 2.7em;
 }
 
+.marimo button[type="submit"] {
+  background-color: #2EAC0E;
+  border-color: #2EAC0E;
+  color: white;
+  font-size: 1.2rem;
+  padding: 18px 15px;
+}
+
+.marimo button[type="submit"]:hover {
+  background-color: #4ac42d;
+  border-color: #4ac42d;
+}
+
+.marimo button[type="submit"]:active {
+  background-color: #24800c;
+  border-color: #24800c;
+}
+
 h2 {
   margin-top: 1.4em !important;
   margin-bottom: 0.7em !important;

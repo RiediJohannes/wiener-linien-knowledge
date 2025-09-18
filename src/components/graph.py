@@ -59,11 +59,11 @@ def get_stops(*, with_clusters = False, only_in_use: bool = False, id_list: list
     response = execute_query(query)
     return _parse_stops_from_response(response)
 
-def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
-    if stop_id is None and stop_name is None:
-        return get_stops()
+def get_stop_cluster(stop_identifier = None) -> list[Stop] | None:
+    if stop_identifier is None:
+        return get_stops(with_clusters=True)
 
-    where_clause: str = f"start.id = '{stop_id}'" if stop_id is not None else f"start.name = '{stop_name}'"
+    where_clause: str = f"start.id = '{stop_identifier}' OR start.name CONTAINS '{stop_identifier}'"
 
     base_query = f"""
     MATCH (start:Stop)
@@ -76,7 +76,7 @@ def get_stop_cluster(*, stop_id = None, stop_name = None) -> list[Stop] | None:
     WHERE node IS NOT NULL
     """
 
-    query = _finalize_stop_query(base_query, "node")
+    query = _finalize_stop_query(base_query, "node", with_clusters=True)
     response = execute_query(query)
     return _parse_stops_from_response(response)
 

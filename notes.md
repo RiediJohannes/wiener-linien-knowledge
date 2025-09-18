@@ -71,7 +71,8 @@ They were particularly fond of:
   - 14:00-19:00
   - 22:00-00:30
 - 18.9.
-  - 15:00-
+  - 15:00-18:30
+  - 19:30-
   
 ## Submission
 

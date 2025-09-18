@@ -7,6 +7,7 @@ class Stop:
         self.lat: float = latitude
         self.lon: float = longitude
         self.name: str = name
+        self.is_root = False
 
     def display_lon(self) -> float:
         return self.lon
@@ -16,6 +17,7 @@ class Stop:
 class ClusterStop(Stop):
     def __init__(self, stop_id: str, latitude: float, longitude: float, name: str, cluster_lat: float, cluster_lon: float, cluster_points: list[list[float]]):
        super().__init__(stop_id, latitude, longitude, name)
+       self.is_root = True
        self.cluster_lat: float = cluster_lat
        self.cluster_lon: float = cluster_lon
        if cluster_points:
