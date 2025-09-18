@@ -478,16 +478,18 @@ def _(mo, stops_map_district_num_combobox, subdistricts_per_dist):
         options=_available_subdistricts,
         label="Subdistrict:"
     )
-    return (stops_map_subdistrict_num_combobox,)
 
-
-@app.cell
-def _(mo):
     stops_map_search_button = mo.ui.run_button(
         kind="success",
         label="Search"
     )
-    return (stops_map_search_button,)
+    return stops_map_search_button, stops_map_subdistrict_num_combobox
+
+
+@app.cell
+def _(mo):
+    get_stops_map_tab, set_stops_map_tab = mo.state("All stops")
+    return
 
 
 @app.cell
@@ -498,7 +500,10 @@ def _(
     stops_map_stop_list_input,
     stops_map_subdistrict_num_combobox,
 ):
-    # Create the tabbed interface
+    def update_tab_state(x):
+        #set_stops_map_tab(x)
+        print(f"Updated state to {x}")
+
     stops_map_tabs = mo.ui.tabs({
         "All Stops": mo.vstack([
             mo.md("**All Stops with Clusters**"),
@@ -520,12 +525,13 @@ def _(
             mo.md("*Vienna has 23 districts, split further into a total of 250 subdistricts.*"),
             mo.hstack([stops_map_district_num_combobox, stops_map_subdistrict_num_combobox], justify="start", gap=1.5),
         ])
-    })
+    }, on_change=update_tab_state)
     return (stops_map_tabs,)
 
 
 @app.cell
 def _(mo, stops_map_search_button, stops_map_tabs):
+    #print(get_stops_map_tab())
     print(stops_map_tabs.value)
 
     # Display the tabs
@@ -533,7 +539,7 @@ def _(mo, stops_map_search_button, stops_map_tabs):
     return
 
 
-@app.cell(hide_code=True)
+@app.cell
 def _(
     graph,
     stops_map_district_num_combobox,
@@ -588,7 +594,7 @@ def _(mo, present, stops_map_get_data, stops_map_search_button):
         # Display the results
         _iframe = mo.iframe(_transport_map.as_html(), height=650)
         _stack = [_heading, _iframe]
-    
+
     mo.vstack(_stack)
     return
 
@@ -1350,7 +1356,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(graph, mo, present):
     # Define data sources
     data_sources = {
@@ -1381,7 +1387,7 @@ def _(graph, mo, present):
     return dropdown, update_map
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(dropdown, mo, update_map):
     mo.vstack([dropdown, update_map(dropdown.value)])
     return
@@ -1393,7 +1399,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(mo):
     # Option 1: Simple dropdown selector
     data_source_selector = mo.ui.dropdown(
@@ -1412,7 +1418,7 @@ def _(mo):
     return (data_source_selector,)
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(data_source_selector, graph, mo, present):
     # In another cell - get the data based on selection
     def get_stops_data(selection):
@@ -1441,7 +1447,7 @@ def _(data_source_selector, graph, mo, present):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(mo):
     # Option 2: More advanced with custom inputs
 
@@ -1459,7 +1465,7 @@ def _(mo):
     return (main_selector,)
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(main_selector, mo):
     # Conditional inputs based on selection
     stop_ids_input = mo.ui.text_area(
@@ -1508,7 +1514,7 @@ def _(main_selector, mo):
     )
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(
     cluster_name_input,
     district_input,
@@ -1551,7 +1557,7 @@ def _(
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(mo):
     # Option 3: Tabbed interface
     tabs = mo.ui.tabs({
@@ -1577,7 +1583,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(mo):
     # Cell 1: Create the tabbed interface with inputs
 
@@ -1640,7 +1646,7 @@ def _(mo):
     return (data_source_tabs,)
 
 
-@app.cell
+@app.cell(disabled=True)
 def _(
     cluster_name_input,
     data_source_tabs,
