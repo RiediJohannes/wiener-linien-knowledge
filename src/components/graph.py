@@ -37,8 +37,17 @@ def get_subdistricts() -> list[SubDistrict]:
         record["shape"]
     ) for record in results]
 
-def get_stops(*, with_clusters = False, only_in_use: bool = False, id_list: list[str] = None) -> list[Stop] | None:
-    where_clause = f"WHERE s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else ""
+def get_stops(*, with_clusters = False, only_in_use: bool = False, id_list: list[str] = None, name_list: list[str] = None) -> list[Stop] | None:
+    conditions = []
+    if id_list:
+        conditions.append(f"s.id IN [\"{'", "'.join(id_list)}\"]")
+    if name_list:
+        conditions.append(f"""ANY(
+          elem IN [\"{'", "'.join(name_list)}\"]
+          WHERE s.name CONTAINS elem
+        )""")
+
+    where_clause = f"WHERE {' OR '.join(conditions)}" if conditions else ""
     in_use_label = f":InUse" if only_in_use else ""
 
     base_query = f"""
