@@ -7,7 +7,6 @@ app = marimo.App(width="medium", app_title="", css_file="styles/notebook.css")
 @app.cell(hide_code=True)
 def imports():
     import marimo as mo
-    import pandas as pd
 
     import src.components.graph as graph
     import src.components.geo_spatial as geo
@@ -24,7 +23,7 @@ def imports():
 def project_heading(mo):
     mo.callout(mo.md("""
     # 🚊 Wiener Linien Knowledge Graph 🚋
-    """), kind='danger')
+    """), kind='danger').center()
     return
 
 
@@ -134,18 +133,27 @@ def _(mo):
     return
 
 
-@app.cell(disabled=True)
-def merging_nearby_stops(geo, graph):
-    _stops = graph.get_stops()
-    print(f"Queried {len(_stops)} stops from the graph")
+@app.cell
+def merge_nearby_stops_runner(present):
+    button_merge_nearby_stops = present.create_run_button(label="Merge Nearby Stops")
+    return (button_merge_nearby_stops,)
 
-    _stop_clusters = geo.find_stop_clusters(_stops, 200, 400)
-    print(f"Detected {len(_stop_clusters)} clusters of stops")
 
-    _summary = graph.cluster_stops(_stop_clusters)
-    print(f"""\nOperation successful:
-    Created {_summary.counters.relationships_created} relationships
-    Added {_summary.counters.labels_added} labels""")
+@app.cell
+def merge_nearby_stops(button_merge_nearby_stops, geo, graph, present):
+    def _merge_nearby_stops():
+        _stops = graph.get_stops()
+        print(f"Queried {len(_stops)} stops from the graph")
+
+        _stop_clusters = geo.find_stop_clusters(_stops, 200, 400)
+        print(f"Detected {len(_stop_clusters)} clusters of stops")
+
+        _summary = graph.cluster_stops(_stop_clusters)
+        print(f"""\nOperation successful:
+        Created {_summary.counters.relationships_created} relationships
+        Added {_summary.counters.labels_added} labels""")
+
+    present.run_code(button_merge_nearby_stops.value, _merge_nearby_stops)
     return
 
 
@@ -165,14 +173,13 @@ def _(mo):
 
 @app.cell
 def _(present):
-    test_run_button, test_run_html = present.create_run_button(label="Merge Clusters")
-    test_run_html
-    return (test_run_button,)
+    button_merge_related_stops = present.create_run_button(label="Merge Related Stops")
+    return (button_merge_related_stops,)
 
 
 @app.cell
-def detect_station_exits(graph, present, test_run_button):
-    def _merge_related_stops(x = None):
+def detect_station_exits(button_merge_related_stops, graph, present):
+    def _merge_related_stops():
         print("Merging related clusters...")
         _updated_clusters: int = graph.merge_related_clusters()
         print(f"Updated {_updated_clusters} stop clusters")
@@ -212,7 +219,7 @@ def detect_station_exits(graph, present, test_run_button):
         else:
             print("❌ WARNING: Detected some clusters that have more than one ClusterStop member!")
 
-    present.run_code(test_run_button.value, _merge_related_stops)
+    present.run_code(button_merge_related_stops.value, _merge_related_stops)
     return
 
 
@@ -252,10 +259,24 @@ def _(mo):
 
 
 @app.cell
-def reassign_cluster_stops(graph, operation_assign_cluster_root):
-    print("Re-assigning cluster stops...")
-    _affected_rows = graph.execute_operation_returning_count(operation_assign_cluster_root)
-    print(f"Affected {_affected_rows} nodes")
+def _(present):
+    button_reassign_cluster_stops = present.create_run_button(label="Reassign Cluster Stops")
+    return (button_reassign_cluster_stops,)
+
+
+@app.cell
+def reassign_cluster_stops(
+    button_reassign_cluster_stops,
+    graph,
+    operation_assign_cluster_root,
+    present,
+):
+    def _reassign_cluster_stops():
+        print("Re-assigning cluster stops...")
+        _affected_rows = graph.execute_operation_returning_count(operation_assign_cluster_root)
+        print(f"Affected {_affected_rows} nodes")
+
+    present.run_code(button_reassign_cluster_stops.value, _reassign_cluster_stops)
     return
 
 
@@ -286,11 +307,25 @@ def _(mo):
 
 
 @app.cell
-def _(graph, operation_move_stop_relations_to_root):
-    print("Moving over all :STOPS_AT relationships to cluster roots...")
-    _response = graph.execute_batched_query(operation_move_stop_relations_to_root)
-    _moved_relationships: int = int(_response[0][0]) if _response else 0
-    print(f"Moved a total of {_moved_relationships} :STOPS_AT relationships")
+def _(present):
+    button_move_stop_relations_to_root = present.create_run_button(label="Move Stop Relations")
+    return (button_move_stop_relations_to_root,)
+
+
+@app.cell
+def _(
+    button_move_stop_relations_to_root,
+    graph,
+    operation_move_stop_relations_to_root,
+    present,
+):
+    def _move_stop_relations_to_root():
+        print("Moving over all :STOPS_AT relationships to cluster roots...")
+        _response = graph.execute_batched_query(operation_move_stop_relations_to_root)
+        _moved_relationships: int = int(_response[0][0]) if _response else 0
+        print(f"Moved a total of {_moved_relationships} :STOPS_AT relationships")
+
+    present.run_code(button_move_stop_relations_to_root.value, _move_stop_relations_to_root)
     return
 
 
@@ -323,9 +358,23 @@ def _(mo):
 
 
 @app.cell
-def _(graph, operation_delete_stops_outside_vienna):
-    _summary = graph.execute_operation(operation_delete_stops_outside_vienna)
-    print(f"Deleted {_summary.counters.nodes_deleted} nodes")
+def _(present):
+    button_delete_stops_outside_vienna = present.create_run_button(label="Delete Stops outside Viena")
+    return (button_delete_stops_outside_vienna,)
+
+
+@app.cell
+def _(
+    button_delete_stops_outside_vienna,
+    graph,
+    operation_delete_stops_outside_vienna,
+    present,
+):
+    def _delete_stops_outside_vienna():
+        _summary = graph.execute_operation(operation_delete_stops_outside_vienna)
+        print(f"Deleted {_summary.counters.nodes_deleted} nodes")
+
+    present.run_code(button_delete_stops_outside_vienna.value, _delete_stops_outside_vienna)
     return
 
 
@@ -336,19 +385,36 @@ def _(mo):
 
 
 @app.cell
-def match_stops_with_districts(geo, graph):
-    _stops = graph.get_stops()
-    print(f"Queried {len(_stops)} stops from the graph")
-    _subdistricts = graph.get_subdistricts()
-    print(f"Queried {len(_subdistricts)} subdistricts from the graph")
+def _(present):
+    button_match_stops_to_districts = present.create_run_button(label="Match Stops to Districts")
+    return (button_match_stops_to_districts,)
 
-    _stops_within_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 20)
-    _summary = graph.connect_stop_to_subdistricts(_stops_within_districts, 'LOCATED_IN')
-    print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
 
-    _stops_close_to_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 500)
-    _summary = graph.connect_stop_to_subdistricts(_stops_close_to_districts, 'LOCATED_NEARBY')
-    print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+@app.cell
+def match_stops_with_districts(
+    button_match_stops_to_districts,
+    geo,
+    graph,
+    present,
+):
+    def _match_stops_to_districts():
+        print("Querying stops and subdistricts...")
+        _stops = graph.get_stops()
+        print(f"Queried {len(_stops)} stops from the graph")
+        _subdistricts = graph.get_subdistricts()
+        print(f"Queried {len(_subdistricts)} subdistricts from the graph")
+
+        print("Detecting stops within subdistricts...")
+        _stops_within_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 20)
+        _summary = graph.connect_stop_to_subdistricts(_stops_within_districts, 'LOCATED_IN')
+        print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
+
+        print("Detecting stops near subdistricts...")
+        _stops_close_to_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 500)
+        _summary = graph.connect_stop_to_subdistricts(_stops_close_to_districts, 'LOCATED_NEARBY')
+        print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+
+    present.run_code(button_match_stops_to_districts.value, _match_stops_to_districts)
     return
 
 
@@ -392,18 +458,29 @@ def _(mo):
 
 
 @app.cell
+def _(present):
+    button_determine_nearby_clusters = present.create_run_button(label="Determine Proximity for Clusters")
+    return (button_determine_nearby_clusters,)
+
+
+@app.cell
 def functions_entails_vicinity(
+    button_determine_nearby_clusters,
     graph,
     operation_cluster_located_in,
     operation_cluster_located_nearby,
+    present,
 ):
-    # Located nearby relationships
-    _summary = graph.execute_operation(operation_cluster_located_nearby)
-    print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+    def _determine_nearby_clusters():
+        # Located nearby relationships
+        _summary = graph.execute_operation(operation_cluster_located_nearby)
+        print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+    
+        # Located in relationships
+        _summary = graph.execute_operation(operation_cluster_located_in)
+        print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
 
-    # Located in relationships
-    _summary = graph.execute_operation(operation_cluster_located_in)
-    print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
+    present.run_code(button_determine_nearby_clusters.value, _determine_nearby_clusters)
     return
 
 
@@ -426,14 +503,28 @@ def _(mo):
 
 
 @app.cell
-def _(graph, operation_cluster_position):
-    print("Calculating the average position")
-    _summary = graph.execute_operation(operation_cluster_position)
-    print(f"Set {_summary.counters.properties_set} properties")
-    return
+def _(present):
+    button_calculate_cluster_position = present.create_run_button(label="Calculate Cluster Positions")
+    return (button_calculate_cluster_position,)
 
 
 @app.cell
+def _(
+    button_calculate_cluster_position,
+    graph,
+    operation_cluster_position,
+    present,
+):
+    def _calculate_cluster_position():
+        print("Calculating the average position of each cluster...")
+        _summary = graph.execute_operation(operation_cluster_position)
+        print(f"Set {_summary.counters.properties_set} properties")
+    
+    present.run_code(button_calculate_cluster_position.value, _calculate_cluster_position)
+    return
+
+
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
@@ -597,8 +688,6 @@ def _(
             description = f"District {district}, Subdistrict {subdistrict}"
 
         return stops, description
-
-    #stops_map_tabs.value
     return (stops_map_get_data,)
 
 
@@ -621,22 +710,23 @@ def _(mo, present, stops_map_get_data, stops_map_search_button):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(graph, mo, present):
-    _stops = graph.get_stops(with_clusters=True, id_list=["at:49:1000:0:1"], name_list=['Marx'])
-    #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
-    #_stops = graph.get_stop_cluster('Valiergasse')
-    #_stops = graph.get_stops_for_subdistrict(11, 2)
-
-    # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
-    # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
-    _transport_map.add_stops(_stops)
-
-    # Visible output
-    _heading = mo.md("### **Explore stop locations and clusters**")
-    _iframe = mo.iframe(_transport_map.as_html(), height=650)
-    mo.vstack([_heading, _iframe])
+    if False:
+        _stops = graph.get_stops(with_clusters=True, id_list=["at:49:1000:0:1"], name_list=['Marx'])
+        #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
+        #_stops = graph.get_stop_cluster('Valiergasse')
+        #_stops = graph.get_stops_for_subdistrict(11, 2)
+    
+        # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
+        # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
+        _transport_map.add_stops(_stops)
+    
+        # Visible output
+        _heading = mo.md("### **Explore stop locations and clusters**")
+        _iframe = mo.iframe(_transport_map.as_html(), height=650)
+        mo.vstack([_heading, _iframe])
     return
 
 
@@ -655,32 +745,41 @@ def _(mo):
 
 
 @app.cell
-def _(geo, graph):
-    _subdistricts = graph.get_subdistricts()
+def _(present):
+    button_determine_neighbouring_districts = present.create_run_button(label="Determine Neighbouring Districts")
+    return (button_determine_neighbouring_districts,)
 
-    print("Finding neighbours of each subdistrict...")
-    # For each district, collect a list of neighbouring districts (with a tolerance of 20 metres)
-    _neighbours = geo.find_neighbouring_subdistricts(_subdistricts, buffer_metres=20)
 
-    _operation = """
-    WITH $neighbours_dict as source_dict
-    UNWIND keys(source_dict) AS district_id 
-      WITH source_dict, district_id, 
-         toInteger(split(district_id, '-')[0]) AS left_dist, 
-         toInteger(split(district_id, '-')[1]) AS left_sub
-      MATCH (left:SubDistrict {district_num: left_dist, sub_district_num: left_sub})
+@app.cell
+def _(button_determine_neighbouring_districts, geo, graph, present):
+    def _determine_neighbouring_districts():
+        _subdistricts = graph.get_subdistricts()
+    
+        print("Finding neighbours of each subdistrict...")
+        # For each district, collect a list of neighbouring districts (with a tolerance of 20 metres)
+        _neighbours = geo.find_neighbouring_subdistricts(_subdistricts, buffer_metres=20)
+    
+        _operation = """
+        WITH $neighbours_dict as source_dict
+        UNWIND keys(source_dict) AS district_id 
+          WITH source_dict, district_id, 
+             toInteger(split(district_id, '-')[0]) AS left_dist, 
+             toInteger(split(district_id, '-')[1]) AS left_sub
+          MATCH (left:SubDistrict {district_num: left_dist, sub_district_num: left_sub})
+    
+          UNWIND source_dict[district_id] AS neighbour_id
+            WITH left, 
+               toInteger(split(neighbour_id, '-')[0]) AS right_dist, 
+               toInteger(split(neighbour_id, '-')[1]) AS right_sub
+            MATCH (right:SubDistrict {district_num: right_dist, sub_district_num: right_sub})
+            MERGE (left)-[:NEIGHBOURS]->(right)
+        """
+    
+        print("Adding ':NEIGHBOURS' relationships to districts...")
+        _summary = graph.execute_operation(_operation, neighbours_dict=_neighbours)
+        print(f"Created {_summary.counters.relationships_created} relationships")
 
-      UNWIND source_dict[district_id] AS neighbour_id
-        WITH left, 
-           toInteger(split(neighbour_id, '-')[0]) AS right_dist, 
-           toInteger(split(neighbour_id, '-')[1]) AS right_sub
-        MATCH (right:SubDistrict {district_num: right_dist, sub_district_num: right_sub})
-        MERGE (left)-[:NEIGHBOURS]->(right)
-    """
-
-    print("Adding ':NEIGHBOURS' relationships to districts...")
-    _summary = graph.execute_operation(_operation, neighbours_dict=_neighbours)
-    print(f"Created {_summary.counters.relationships_created} relationships")
+    present.run_code(button_determine_neighbouring_districts.value, _determine_neighbouring_districts)
     return
 
 
@@ -705,10 +804,24 @@ def _(mo):
 
 
 @app.cell
-def _(graph, operation_calculate_population_density):
-    print("Calculating population density of each subdistrict...")
-    _summary = graph.execute_operation(operation_calculate_population_density)
-    print(f"(Re)set {_summary.counters.properties_set} properties")
+def _(present):
+    button_calculate_population_density = present.create_run_button(label="Calculate Population Densities")
+    return (button_calculate_population_density,)
+
+
+@app.cell
+def _(
+    button_calculate_population_density,
+    graph,
+    operation_calculate_population_density,
+    present,
+):
+    def _calculate_population_density():
+        print("Calculating population density of each subdistrict...")
+        _summary = graph.execute_operation(operation_calculate_population_density)
+        print(f"(Re)set {_summary.counters.properties_set} properties")
+
+    present.run_code(button_calculate_population_density.value, _calculate_population_density)
     return
 
 
@@ -801,41 +914,52 @@ def _(mo):
 
 
 @app.cell
+def _(present):
+    button_classify_service_exceptions = present.create_run_button(label="Classify Exceptions+Trips+Stops")
+    return (button_classify_service_exceptions,)
+
+
+@app.cell
 def _(
+    button_classify_service_exceptions,
     graph,
     operation_classify_service_exceptions,
     operation_classify_stops,
     operation_classify_trips,
     operation_collect_in_use_stops,
+    present,
 ):
-    print("Classifying service exceptions...")
-    _added_exceptions_query, _removed_exceptions_query, _ = operation_classify_service_exceptions.split(";")
-    _summary = graph.execute_operation(_added_exceptions_query)
-    print(f"Added {_summary.counters.labels_added} ':AddedService' labels")
-    _summary = graph.execute_operation(_removed_exceptions_query)
-    print(f"Added {_summary.counters.labels_added} ':RemovedService' labels")
+    def _classify_service_exceptions():
+        print("Classifying service exceptions...")
+        _added_exceptions_query, _removed_exceptions_query, _ = operation_classify_service_exceptions.split(";")
+        _summary = graph.execute_operation(_added_exceptions_query)
+        print(f"Added {_summary.counters.labels_added} ':AddedService' labels")
+        _summary = graph.execute_operation(_removed_exceptions_query)
+        print(f"Added {_summary.counters.labels_added} ':RemovedService' labels")
+    
+        print("\nClassifying trips according to mode of transport...")
+        _bus_trips_query, _tram_trips_query, _subway_trips_query, _ = operation_classify_trips.split(";")
+        _summary = graph.execute_operation(_bus_trips_query)
+        print(f"Added {_summary.counters.labels_added} ':BusTrip' labels")
+        _summary = graph.execute_operation(_tram_trips_query)
+        print(f"Added {_summary.counters.labels_added} ':TramTrip' labels")
+        _summary = graph.execute_operation(_subway_trips_query)
+        print(f"Added {_summary.counters.labels_added} ':SubwayTrip' labels")
+    
+        print("\nClassifying stops according to their transit connections...")
+        _bus_stop_query, _tram_stop_query, _subway_station_query, _ = operation_classify_stops.split(";")
+        _summary = graph.execute_operation(_bus_stop_query)
+        print(f"Added {_summary.counters.labels_added} ':BusStop' labels")
+        _summary = graph.execute_operation(_tram_stop_query)
+        print(f"Added {_summary.counters.labels_added} ':TramStop' labels")
+        _summary = graph.execute_operation(_subway_station_query)
+        print(f"Added {_summary.counters.labels_added} ':SubwayStation' labels")
+    
+        print("\nMarking stops that are actually in use...")
+        _summary = graph.execute_operation(operation_collect_in_use_stops)
+        print(f"Added {_summary.counters.labels_added} ':InUse' labels")
 
-    print("\nClassifying trips according to mode of transport...")
-    _bus_trips_query, _tram_trips_query, _subway_trips_query, _ = operation_classify_trips.split(";")
-    _summary = graph.execute_operation(_bus_trips_query)
-    print(f"Added {_summary.counters.labels_added} ':BusTrip' labels")
-    _summary = graph.execute_operation(_tram_trips_query)
-    print(f"Added {_summary.counters.labels_added} ':TramTrip' labels")
-    _summary = graph.execute_operation(_subway_trips_query)
-    print(f"Added {_summary.counters.labels_added} ':SubwayTrip' labels")
-
-    print("\nClassifying stops according to their transit connections...")
-    _bus_stop_query, _tram_stop_query, _subway_station_query, _ = operation_classify_stops.split(";")
-    _summary = graph.execute_operation(_bus_stop_query)
-    print(f"Added {_summary.counters.labels_added} ':BusStop' labels")
-    _summary = graph.execute_operation(_tram_stop_query)
-    print(f"Added {_summary.counters.labels_added} ':TramStop' labels")
-    _summary = graph.execute_operation(_subway_station_query)
-    print(f"Added {_summary.counters.labels_added} ':SubwayStation' labels")
-
-    print("\nMarking stops that are actually in use...")
-    _summary = graph.execute_operation(operation_collect_in_use_stops)
-    print(f"Added {_summary.counters.labels_added} ':InUse' labels")
+    present.run_code(button_classify_service_exceptions.value, _classify_service_exceptions)
     return
 
 
@@ -877,10 +1001,24 @@ def _(mo):
 
 
 @app.cell
-def _(graph, operation_find_related_stops):
-    print("Finding pairs of geographically close stops...")
-    _summary = graph.execute_operation(operation_find_related_stops)
-    print(f"Added {int(_summary.counters.relationships_created / 2)} symmetric :IS_CLOSE_TO relationships")
+def _(present):
+    button_find_neighbouring_stops = present.create_run_button(label="Find Neighbouring Stops")
+    return (button_find_neighbouring_stops,)
+
+
+@app.cell
+def _(
+    button_find_neighbouring_stops,
+    graph,
+    operation_find_related_stops,
+    present,
+):
+    def _find_neighbouring_stops():
+        print("Finding pairs of geographically close stops...")
+        _summary = graph.execute_operation(operation_find_related_stops)
+        print(f"Added {int(_summary.counters.relationships_created / 2)} symmetric :IS_CLOSE_TO relationships")
+
+    present.run_code(button_find_neighbouring_stops.value, _find_neighbouring_stops)
     return
 
 
@@ -897,10 +1035,24 @@ def _(mo):
 
 
 @app.cell
-def _(graph, operation_find_far_apart_related_stops):
-    print("Finding pairs of geographically far apart but connected stops...")
-    _summary = graph.execute_operation(operation_find_far_apart_related_stops)
-    print(f"Added {int(_summary.counters.relationships_created)} additional :IS_CLOSE_TO relationships")
+def _(present):
+    button_find_far_but_connected_stops = present.create_run_button(label="Find Directly Connected Stops")
+    return (button_find_far_but_connected_stops,)
+
+
+@app.cell
+def _(
+    button_find_far_but_connected_stops,
+    graph,
+    operation_find_far_apart_related_stops,
+    present,
+):
+    def _find_far_but_connected_stops():
+        print("Finding pairs of geographically far apart but connected stops...")
+        _summary = graph.execute_operation(operation_find_far_apart_related_stops)
+        print(f"Added {int(_summary.counters.relationships_created)} additional :IS_CLOSE_TO relationships")
+
+    present.run_code(button_find_far_but_connected_stops.value, _find_far_but_connected_stops)
     return
 
 
@@ -941,10 +1093,24 @@ def _(mo):
 
 
 @app.cell
-def calculate_trips_per_year(graph, operation_calculate_frequency_of_trips):
-    print("Calculating operations per year for every trip...")
-    _summary = graph.execute_operation(operation_calculate_frequency_of_trips)
-    print(f"Calculated and (re)set {_summary.counters.properties_set} properties")
+def _(present):
+    button_calculate_frequency_of_trips = present.create_run_button(label="Calculate Frequency of Trips")
+    return (button_calculate_frequency_of_trips,)
+
+
+@app.cell
+def calculate_trips_per_year(
+    button_calculate_frequency_of_trips,
+    graph,
+    operation_calculate_frequency_of_trips,
+    present,
+):
+    def _calculate_frequency_of_trips():
+        print("Calculating operations per year for every trip...")
+        _summary = graph.execute_operation(operation_calculate_frequency_of_trips)
+        print(f"Calculated and (re)set {_summary.counters.properties_set} properties")
+
+    present.run_code(button_calculate_frequency_of_trips.value, _calculate_frequency_of_trips)
     return
 
 
@@ -982,29 +1148,38 @@ def _(mo):
 
 
 @app.cell
-def _(graph):
-    _operation = """
-    // Consider each pair of stops that appears consecutively in some trip t
-    MATCH (t:Trip:{type_of_trip})-[at1:STOPS_AT]->(s1:Stop),
-          (t)-[at2:STOPS_AT]->(s2:Stop)
-    WHERE s1.id <> s2.id AND at2.stop_sequence = at1.stop_sequence + 1
-    // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
-    MATCH (t)-[:OPERATING_ON]->(service:Service)
-    WITH s1, s2,
-      sum(service.operations_per_year) as total_operations_per_year
-    // Create a connection relationship with the number of connections per year
-    MERGE (s1)-[conn:{type_of_connection}]->(s2)
-    SET conn.yearly = total_operations_per_year
-    """
+def _(present):
+    button_find_connections_between_stops = present.create_run_button(label="Find Connections between Stops")
+    return (button_find_connections_between_stops,)
 
-    _modes_of_transport = [("BusTrip", "BUS_CONNECTS_TO"), ("TramTrip", "TRAM_CONNECTS_TO"), ("SubwayTrip", "SUBWAY_CONNECTS_TO")]
 
-    for trip, connection in _modes_of_transport:
-        print(f"Finding '{trip}' connections...")
-        # We need to do string interpolation here since Neo4j does not allow parameters in labels
-        _query = _operation.format(type_of_trip=trip, type_of_connection=connection)
-        _summary = graph.execute_operation(_query)
-        print(f"Created {_summary.counters.relationships_created} new '{connection}' relationships and set {_summary.counters.properties_set} yearly operations properties")
+@app.cell
+def _(button_find_connections_between_stops, graph, present):
+    def _find_connections_between_stops():
+        _operation = """
+        // Consider each pair of stops that appears consecutively in some trip t
+        MATCH (t:Trip:{type_of_trip})-[at1:STOPS_AT]->(s1:Stop),
+              (t)-[at2:STOPS_AT]->(s2:Stop)
+        WHERE s1.id <> s2.id AND at2.stop_sequence = at1.stop_sequence + 1
+        // Grab the unique Service connected to each trip t and sum up the yearly operations of all trips through s1 -> s2
+        MATCH (t)-[:OPERATING_ON]->(service:Service)
+        WITH s1, s2,
+          sum(service.operations_per_year) as total_operations_per_year
+        // Create a connection relationship with the number of connections per year
+        MERGE (s1)-[conn:{type_of_connection}]->(s2)
+        SET conn.yearly = total_operations_per_year
+        """
+    
+        _modes_of_transport = [("BusTrip", "BUS_CONNECTS_TO"), ("TramTrip", "TRAM_CONNECTS_TO"), ("SubwayTrip", "SUBWAY_CONNECTS_TO")]
+    
+        for trip, connection in _modes_of_transport:
+            print(f"Finding '{trip}' connections...")
+            # We need to do string interpolation here since Neo4j does not allow parameters in labels
+            _query = _operation.format(type_of_trip=trip, type_of_connection=connection)
+            _summary = graph.execute_operation(_query)
+            print(f"Created {_summary.counters.relationships_created} new '{connection}' relationships and set {_summary.counters.properties_set} yearly operations properties")
+
+    present.run_code(button_find_connections_between_stops.value, _find_connections_between_stops)
     return
 
 
@@ -1194,9 +1369,25 @@ def _(mo):
 
 
 @app.cell
-def _(graph, triples_queries):
-    fact_triples = graph.query_triples(triples_queries)
-    return (fact_triples,)
+def _(present):
+    button_query_triples = present.create_run_button(label="Query Training Triples")
+    return (button_query_triples,)
+
+
+@app.cell
+def _(button_query_triples, graph, learning, present, triples_queries):
+    training = []
+    validation = []
+    testing = []
+
+    def _query_triples():
+        fact_triples = graph.query_triples(triples_queries)
+    
+        # Index the entities/relations in the triples and split them into training, validation and testing data 
+        training, validation, testing = learning.generate_training_set(fact_triples)
+
+    present.run_code(button_query_triples.value, _query_triples)
+    return testing, training, validation
 
 
 @app.cell(hide_code=True)
@@ -1212,10 +1403,7 @@ def _(mo):
 
 
 @app.cell
-def _(fact_triples, learning):
-    # Index the entities/relations in the triples and split them into training, validation and testing data 
-    training, validation, testing = learning.generate_training_set(fact_triples)
-
+def _():
     # Prepare model training configurations
     training_configs = {
         'TransE': {
@@ -1269,7 +1457,7 @@ def _(fact_triples, learning):
             )
         }
     }
-    return testing, training, training_configs, validation
+    return (training_configs,)
 
 
 @app.cell(hide_code=True)
@@ -1287,15 +1475,32 @@ def _(mo):
 
 
 @app.cell
-def _(learning, testing, training, training_configs, validation):
-    _model = 'RotatE'
-    _save_path = f"trained_models/{_model}"
+def _(present):
+    button_train_model_rotate = present.create_run_button(label="Train Model RotatE", extra_classes="danger")
+    return (button_train_model_rotate,)
 
-    rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
-    learning.save_training_results(rotate_results, _save_path, validation_triples=validation, testing_triples=testing)
 
-    # Display some immediate results to assess the quality of the trained model
-    learning.summarize_training_metrics(rotate_results.metric_results)
+@app.cell
+def _(
+    button_train_model_rotate,
+    learning,
+    present,
+    testing,
+    training,
+    training_configs,
+    validation,
+):
+    def _train_model_rotate():
+        _model = 'RotatE'
+        _save_path = f"trained_models/{_model}"
+    
+        rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
+        learning.save_training_results(rotate_results, _save_path, validation_triples=validation, testing_triples=testing)
+    
+        # Display some immediate results to assess the quality of the trained model
+        learning.summarize_training_metrics(rotate_results.metric_results)
+
+    present.run_code(button_train_model_rotate.value, _train_model_rotate)
     return
 
 
@@ -1314,15 +1519,32 @@ def _(mo):
 
 
 @app.cell
-def _(learning, testing, training, training_configs, validation):
-    _model = 'ComplEx'
-    _save_path = f"trained_models/{_model}"
+def _(present):
+    button_train_model_complex = present.create_run_button(label="Train Model ComplEx", extra_classes="danger")
+    return (button_train_model_complex,)
 
-    complex_results = learning.train_model(training, validation, testing, training_configs[_model])
-    learning.save_training_results(complex_results, _save_path, validation_triples=validation, testing_triples=testing)
 
-    # Display some immediate results to assess the quality of the trained model
-    learning.summarize_training_metrics(complex_results.metric_results)
+@app.cell
+def _(
+    button_train_model_complex,
+    learning,
+    present,
+    testing,
+    training,
+    training_configs,
+    validation,
+):
+    def _train_model_complex():
+        _model = 'ComplEx'
+        _save_path = f"trained_models/{_model}"
+    
+        complex_results = learning.train_model(training, validation, testing, training_configs[_model])
+        learning.save_training_results(complex_results, _save_path, validation_triples=validation, testing_triples=testing)
+    
+        # Display some immediate results to assess the quality of the trained model
+        learning.summarize_training_metrics(complex_results.metric_results)
+
+    present.run_code(button_train_model_complex.value, _train_model_complex)
     return
 
 
@@ -1346,13 +1568,14 @@ def _(mo):
 
 @app.cell
 def _(graph, learning, prediction, testing, validation):
-    _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
-    _stops_with_neighbours = graph.get_nearby_stops()
-
-    _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
-    #_pred.score_potential_connections(_stops_with_neighbours)
-
-    _pred.predict_connection_frequency(_stops_with_neighbours)
+    if False:
+        _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
+        _stops_with_neighbours = graph.get_nearby_stops()
+    
+        _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
+        #_pred.score_potential_connections(_stops_with_neighbours)
+    
+        _pred.predict_connection_frequency(_stops_with_neighbours)
     return
 
 
@@ -1364,11 +1587,12 @@ def _(mo):
 
 @app.cell
 def _(learning, prediction, testing, validation):
-    _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
-
-    _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
-    _prediction_dataframe = _pred.predict_component(head="at:49:1530:0:4", rel="TRAM_CONNECTS_TO").sort_values(by=['score'], ascending=True)
-    _prediction_dataframe["tail_label"].tolist()
+    if False:
+        _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
+    
+        _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
+        _prediction_dataframe = _pred.predict_component(head="at:49:1530:0:4", rel="TRAM_CONNECTS_TO").sort_values(by=['score'], ascending=True)
+        _prediction_dataframe["tail_label"].tolist()
     return
 
 

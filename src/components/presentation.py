@@ -295,12 +295,13 @@ def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="cod
         pass
 
 
-def create_run_button(label="Execute query", **kwargs) -> tuple[mo.Html, mo.Html]:
+def create_run_button(label="Execute query", extra_classes: str = "", **kwargs) -> mo.Html:
     button = mo.ui.run_button(label=label, kind="neutral", **kwargs)
     extended_button_html = mo.Html(f"""
-    <div class="run-code">
+    <div class="run-code {extra_classes}">
         {button}
     <div>
     """)
 
-    return button, extended_button_html
+    mo.output.append(extended_button_html)
+    return button
