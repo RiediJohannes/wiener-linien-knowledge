@@ -68,9 +68,11 @@ pre {
 }
 
 .code-output-area {
-  margin: 1em;
+  margin: .5em;
   border: 1px solid #482915;
-  background-color: #f6dfce;
+  background-color: #fff5ed;
+  border-radius: 0.6em;
+  padding: 0.4em;
   font-size: 1.2rem;
   line-height: 1.5rem;
 }

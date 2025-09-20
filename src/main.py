@@ -164,19 +164,19 @@ def _(mo):
 
 
 @app.cell
-def _(create_simple_streaming_runner):
-    test_run_button = create_simple_streaming_runner(button_label="Merge Clusters")
-    test_run_button
-    return
+def _(present):
+    test_run_button, test_run_html = present.create_run_button(label="Merge Clusters")
+    test_run_html
+    return (test_run_button,)
 
 
 @app.cell
-def detect_station_exits(graph, mo, present):
-    def _merge_related_stops(x):
+def detect_station_exits(graph, present, test_run_button):
+    def _merge_related_stops(x = None):
         print("Merging related clusters...")
         _updated_clusters: int = graph.merge_related_clusters()
         print(f"Updated {_updated_clusters} stop clusters")
-    
+
         # Since this is such a complex operation, we verify that everything worked as expected
         print("Verifying integrity...")
         _query = """
@@ -189,7 +189,7 @@ def detect_station_exits(graph, mo, present):
             print("✅ No node is in two clusters")
         else:
             print("❌ WARNING: Detected some stops that are in more than one cluster!")
-    
+
         """
         MATCH (s:Stop)-[:IN_CLUSTER]->(p:Stop)
         WHERE NOT apoc.label.exists(p, "ClusterStop")
@@ -200,7 +200,7 @@ def detect_station_exits(graph, mo, present):
             print("✅ Every cluster parent has the label 'ClusterStop'")   
         else:
             print("❌ WARNING: Detected some stops that are the root of a cluster but are missing the `ClusterStop` label!")
-    
+
         """
         MATCH (s:ClusterStop)-[:IN_CLUSTER*1..5]-(p:ClusterStop)
         WHERE s.id <> p.id
@@ -212,39 +212,7 @@ def detect_station_exits(graph, mo, present):
         else:
             print("❌ WARNING: Detected some clusters that have more than one ClusterStop member!")
 
-    #present.run_code(test_run_button.value, _merge_related_stops)
-
-    def _doit(x):
-        with present.in_output_area():
-            _merge_related_stops(x)
-
-    mo.ui.button(label="Ein Test", on_change=_doit)
-    return
-
-
-@app.cell
-def _(mo):
-    def create_simple_streaming_runner(button_label="Run", **kwargs):
-        button = mo.ui.run_button(label=button_label)
-        return button
-    return (create_simple_streaming_runner,)
-
-
-@app.cell
-def _(create_simple_streaming_runner):
-    def long_process():
-        print("Starting long computation...")
-        print("✅ All batches completed!")
-        return "success"
-
-    run_button = create_simple_streaming_runner(button_label="Merge Clusters")
-    run_button
-    return long_process, run_button
-
-
-@app.cell
-def _(long_process, present, run_button):
-    present.run_code(run_button.value, long_process)
+    present.run_code(test_run_button.value, _merge_related_stops)
     return
 
 

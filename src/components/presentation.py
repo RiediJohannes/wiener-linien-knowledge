@@ -1,10 +1,12 @@
 import html
 import io
 from contextlib import contextmanager, redirect_stdout
+from dataclasses import dataclass
 from enum import Flag, auto
 from typing import Callable, Any
 
 import folium
+import marimo
 import marimo as mo
 from shapely import MultiPoint
 
@@ -287,3 +289,18 @@ def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="cod
                 task()
             finally:
                 output.flush()
+    else:
+        # Add the presentation of a code output area before it is run here, if desired
+        #mo.output.append("^ Press to run ^")
+        pass
+
+
+def create_run_button(label="Execute query", **kwargs) -> tuple[mo.Html, mo.Html]:
+    button = mo.ui.run_button(label=label, kind="neutral", **kwargs)
+    extended_button_html = mo.Html(f"""
+    <div class="run-code">
+        {button}
+    <div>
+    """)
+
+    return button, extended_button_html
