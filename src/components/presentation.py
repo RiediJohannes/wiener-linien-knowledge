@@ -1,6 +1,10 @@
+import html
+import io
+from contextlib import contextmanager, redirect_stdout
 from enum import Flag, auto
 
 import folium
+import marimo as mo
 from shapely import MultiPoint
 
 from src.components.types import Stop, ClusterStop, Connection, ModeOfTransport, Frequency
@@ -162,3 +166,96 @@ class TransportMap:
         # self.base.save("stops_map.html")
 
         return self.base._repr_html_()
+
+
+class MarimoHtmlOutput(io.StringIO):
+    """
+    Captures stdout and streams it to marimo through marimo.output as an HTML object.
+    """
+
+    Container_Html_Template: str = """
+    <ul class="{container_class}">
+        {lines}
+    </ul>
+    """
+
+    Line_Html_Template: str = """
+    <li class={line_class}>{content}</li>
+    """
+
+    def __init__(self, container_css_class="code-output-area", line_css_class="code-output-line"):
+        super().__init__()
+        self.container_css_class = container_css_class
+        self.line_css_class = line_css_class
+        self.lines = []
+        self.current_line = ""  # Buffer for incomplete lines
+
+    def write(self, text):
+        # Extend the current line by the newly arrived text
+        self.current_line += text
+
+        parts = self.current_line.split('\n')
+        # All parts except the last are complete lines
+        complete_lines = parts[:-1]
+        # The last part is either empty (if text ended with \n) or incomplete
+        self.current_line = parts[-1]
+
+        self.lines.extend(complete_lines)
+        self._update_html()
+
+        return len(text)
+
+    def flush(self):
+        # If there's remaining content in current_line, treat it as a complete line
+        if self.current_line:
+            self.lines.append(self.current_line)
+            self.current_line = ""
+            self._update_html()
+
+    def _update_html(self):
+        html_lines = []
+
+        # Complete lines
+        for line in self.lines:
+            html_line = self.Line_Html_Template.format(line_class=self.line_css_class, content=html.escape(line))
+            html_lines.append(html_line)
+
+        # Add current incomplete line if it exists (for real-time feedback)
+        if self.current_line:
+            extended_class = f"{self.line_css_class} current-line"
+            extended_content = f'{html.escape(self.current_line)}<span class="ellipse">...</span>'
+            html_line = self.Line_Html_Template.format(line_class=extended_class, content=extended_content)
+            html_lines.append(html_line)
+
+        html_content = self.Container_Html_Template.format(
+            container_class=self.container_css_class,
+            lines='\n'.join(html_lines)
+        )
+
+        # Use mo.output to stream the updated HTML object to marimo
+        mo.output.replace(mo.Html(html_content))
+
+    def getvalue(self):
+        # Return all lines joined with newlines, plus current incomplete line
+        all_content = '\n'.join(self.lines)
+        if self.current_line:
+            all_content += '\n' + self.current_line if all_content else self.current_line
+        return all_content
+
+
+@contextmanager
+def in_output_area(container_css_class="code-output-area", line_css_class="code-output-line"):
+    """
+    Use this context manager in a with statement to redirect all STDOUT writes to custom HTML
+    output area that is live-streamed to marimo using marimo.output.
+
+    Example:
+        with in_output_area():
+            print("This gets redirected to a custom output area!")
+    """
+    output = MarimoHtmlOutput(container_css_class, line_css_class)
+    with redirect_stdout(output):
+        try:
+            yield
+        finally:
+            output.flush()
