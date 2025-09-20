@@ -164,18 +164,15 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
-    mo.Html("""
-    <div class="marimo-cell">
-        <span>Hi</span>
-    </div>    
-    """) 
+def _(create_simple_streaming_runner):
+    test_run_button = create_simple_streaming_runner(button_label="Merge Clusters")
+    test_run_button
     return
 
 
 @app.cell
-def detect_station_exits(graph, present):
-    with present.in_output_area():
+def detect_station_exits(graph, mo, present):
+    def _merge_related_stops(x):
         print("Merging related clusters...")
         _updated_clusters: int = graph.merge_related_clusters()
         print(f"Updated {_updated_clusters} stop clusters")
@@ -214,6 +211,40 @@ def detect_station_exits(graph, present):
             print("✅ No cluster has more than one ClusterStop")
         else:
             print("❌ WARNING: Detected some clusters that have more than one ClusterStop member!")
+
+    #present.run_code(test_run_button.value, _merge_related_stops)
+
+    def _doit(x):
+        with present.in_output_area():
+            _merge_related_stops(x)
+
+    mo.ui.button(label="Ein Test", on_change=_doit)
+    return
+
+
+@app.cell
+def _(mo):
+    def create_simple_streaming_runner(button_label="Run", **kwargs):
+        button = mo.ui.run_button(label=button_label)
+        return button
+    return (create_simple_streaming_runner,)
+
+
+@app.cell
+def _(create_simple_streaming_runner):
+    def long_process():
+        print("Starting long computation...")
+        print("✅ All batches completed!")
+        return "success"
+
+    run_button = create_simple_streaming_runner(button_label="Merge Clusters")
+    run_button
+    return long_process, run_button
+
+
+@app.cell
+def _(long_process, present, run_button):
+    present.run_code(run_button.value, long_process)
     return
 
 

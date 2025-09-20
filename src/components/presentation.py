@@ -2,6 +2,7 @@ import html
 import io
 from contextlib import contextmanager, redirect_stdout
 from enum import Flag, auto
+from typing import Callable, Any
 
 import folium
 import marimo as mo
@@ -253,9 +254,36 @@ def in_output_area(container_css_class="code-output-area", line_css_class="code-
         with in_output_area():
             print("This gets redirected to a custom output area!")
     """
+
     output = MarimoHtmlOutput(container_css_class, line_css_class)
     with redirect_stdout(output):
         try:
             yield
         finally:
             output.flush()
+
+
+def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="code-output-area", line_css_class="code-output-line"):
+    """
+    Executed the given task once the run_signal changes to True. During the execution of the task, all STDOUT write
+    operations are redirected to a custom HTML output area that is live-streamed to marimo using marimo.output.
+
+    Example:
+        ```
+            # Cell 1
+            run_button = marimo.ui.run_button(label="Run code")
+
+            # Cell 2
+            def my_task():
+                print("Hello world")
+
+            run_code(run_button.value, my_task)
+        ```
+    """
+    if run_signal:
+        output = MarimoHtmlOutput(container_css_class, line_css_class)
+        with redirect_stdout(output):
+            try:
+                task()
+            finally:
+                output.flush()

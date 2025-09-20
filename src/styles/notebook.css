@@ -66,3 +66,15 @@ pre {
     padding: 2px 5px;
     background-color: #eef;
 }
+
+.code-output-area {
+  margin: 1em;
+  border: 1px solid #482915;
+  background-color: #f6dfce;
+  font-size: 1.2rem;
+  line-height: 1.5rem;
+}
+
+.code-output-line {
+
+}
