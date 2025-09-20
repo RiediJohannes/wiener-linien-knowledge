@@ -603,22 +603,20 @@ def _(mo, stops_map_district_num_combobox, subdistricts_per_dist):
 
 @app.cell
 def _(mo):
+    # Define a state object to hold the currently open tab of the stops_map_tabs component
     get_stops_map_tab, set_stops_map_tab = mo.state("All stops")
-    return
+    return get_stops_map_tab, set_stops_map_tab
 
 
 @app.cell
 def _(
     mo,
+    set_stops_map_tab,
     stops_map_district_num_combobox,
     stops_map_stop_input,
     stops_map_stop_list_input,
     stops_map_subdistrict_num_combobox,
 ):
-    def update_tab_state(x):
-        #set_stops_map_tab(x)
-        print(f"Updated state to {x}")
-
     stops_map_tabs = mo.ui.tabs({
         "All Stops": mo.vstack([
             mo.md("**All Stops with Clusters**"),
@@ -640,15 +638,12 @@ def _(
             mo.md("*Vienna has 23 districts, split further into a total of 250 subdistricts.*"),
             mo.hstack([stops_map_district_num_combobox, stops_map_subdistrict_num_combobox], justify="start", gap=1.5),
         ])
-    }, on_change=update_tab_state)
+    }, on_change=set_stops_map_tab)
     return (stops_map_tabs,)
 
 
 @app.cell
 def _(mo, stops_map_search_button, stops_map_tabs):
-    #print(get_stops_map_tab())
-    print(stops_map_tabs.value)
-
     # Display the tabs
     mo.hstack([stops_map_tabs, stops_map_search_button], justify="start", gap=2)
     return
@@ -656,16 +651,16 @@ def _(mo, stops_map_search_button, stops_map_tabs):
 
 @app.cell
 def _(
+    get_stops_map_tab,
     graph,
     stops_map_district_num_combobox,
     stops_map_stop_input,
     stops_map_stop_list_input,
     stops_map_subdistrict_num_combobox,
-    stops_map_tabs,
 ):
     # Behind the scenes: Query the respective data based on the user-selection
     def stops_map_get_data():
-        active_tab = stops_map_tabs.value
+        active_tab = get_stops_map_tab() # stops_map_tabs.value
         stops = []
         description = "No data selected"
 
@@ -695,7 +690,7 @@ def _(
 
 @app.cell
 def _(mo, present, stops_map_get_data, stops_map_search_button):
-    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
+    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12)
 
     _stack = [mo.md(f"**Press 'Search' to run query**")]
     # Add the stops to the map
@@ -1224,7 +1219,7 @@ def _(graph, mo, present):
     _transport_map.add_transit_connections(_connections)
 
     # Visible output
-    _heading = mo.md("### **Explore transit connections**")
+    _heading = mo.md("**Explore transit connections**")
     _iframe = mo.iframe(_transport_map.as_html(), height=650)
     mo.vstack([_heading, _iframe])
     return
