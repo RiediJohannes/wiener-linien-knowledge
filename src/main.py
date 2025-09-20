@@ -19,11 +19,13 @@ def imports():
     return geo, graph, learning, mo, prediction, present, print_raw
 
 
-@app.cell(hide_code=True)
-def project_heading(mo):
-    mo.callout(mo.md("""
-    # 🚊 Wiener Linien Knowledge Graph 🚋
-    """), kind='danger').center()
+@app.cell
+def _(mo):
+    mo.Html("""
+    <div id="title">
+    🚊 Wiener Linien Knowledge Graph 🚋
+    </div
+    """)
     return
 
 
@@ -475,7 +477,7 @@ def functions_entails_vicinity(
         # Located nearby relationships
         _summary = graph.execute_operation(operation_cluster_located_nearby)
         print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
-    
+
         # Located in relationships
         _summary = graph.execute_operation(operation_cluster_located_in)
         print(f"Created {_summary.counters.relationships_created} LOCATED_IN relationships")
@@ -519,7 +521,7 @@ def _(
         print("Calculating the average position of each cluster...")
         _summary = graph.execute_operation(operation_cluster_position)
         print(f"Set {_summary.counters.properties_set} properties")
-    
+
     present.run_code(button_calculate_cluster_position.value, _calculate_cluster_position)
     return
 
@@ -717,12 +719,12 @@ def _(graph, mo, present):
         #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
         #_stops = graph.get_stop_cluster('Valiergasse')
         #_stops = graph.get_stops_for_subdistrict(11, 2)
-    
+
         # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
         # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
         _transport_map.add_stops(_stops)
-    
+
         # Visible output
         _heading = mo.md("### **Explore stop locations and clusters**")
         _iframe = mo.iframe(_transport_map.as_html(), height=650)
@@ -754,11 +756,11 @@ def _(present):
 def _(button_determine_neighbouring_districts, geo, graph, present):
     def _determine_neighbouring_districts():
         _subdistricts = graph.get_subdistricts()
-    
+
         print("Finding neighbours of each subdistrict...")
         # For each district, collect a list of neighbouring districts (with a tolerance of 20 metres)
         _neighbours = geo.find_neighbouring_subdistricts(_subdistricts, buffer_metres=20)
-    
+
         _operation = """
         WITH $neighbours_dict as source_dict
         UNWIND keys(source_dict) AS district_id 
@@ -766,7 +768,7 @@ def _(button_determine_neighbouring_districts, geo, graph, present):
              toInteger(split(district_id, '-')[0]) AS left_dist, 
              toInteger(split(district_id, '-')[1]) AS left_sub
           MATCH (left:SubDistrict {district_num: left_dist, sub_district_num: left_sub})
-    
+
           UNWIND source_dict[district_id] AS neighbour_id
             WITH left, 
                toInteger(split(neighbour_id, '-')[0]) AS right_dist, 
@@ -774,7 +776,7 @@ def _(button_determine_neighbouring_districts, geo, graph, present):
             MATCH (right:SubDistrict {district_num: right_dist, sub_district_num: right_sub})
             MERGE (left)-[:NEIGHBOURS]->(right)
         """
-    
+
         print("Adding ':NEIGHBOURS' relationships to districts...")
         _summary = graph.execute_operation(_operation, neighbours_dict=_neighbours)
         print(f"Created {_summary.counters.relationships_created} relationships")
@@ -936,7 +938,7 @@ def _(
         print(f"Added {_summary.counters.labels_added} ':AddedService' labels")
         _summary = graph.execute_operation(_removed_exceptions_query)
         print(f"Added {_summary.counters.labels_added} ':RemovedService' labels")
-    
+
         print("\nClassifying trips according to mode of transport...")
         _bus_trips_query, _tram_trips_query, _subway_trips_query, _ = operation_classify_trips.split(";")
         _summary = graph.execute_operation(_bus_trips_query)
@@ -945,7 +947,7 @@ def _(
         print(f"Added {_summary.counters.labels_added} ':TramTrip' labels")
         _summary = graph.execute_operation(_subway_trips_query)
         print(f"Added {_summary.counters.labels_added} ':SubwayTrip' labels")
-    
+
         print("\nClassifying stops according to their transit connections...")
         _bus_stop_query, _tram_stop_query, _subway_station_query, _ = operation_classify_stops.split(";")
         _summary = graph.execute_operation(_bus_stop_query)
@@ -954,7 +956,7 @@ def _(
         print(f"Added {_summary.counters.labels_added} ':TramStop' labels")
         _summary = graph.execute_operation(_subway_station_query)
         print(f"Added {_summary.counters.labels_added} ':SubwayStation' labels")
-    
+
         print("\nMarking stops that are actually in use...")
         _summary = graph.execute_operation(operation_collect_in_use_stops)
         print(f"Added {_summary.counters.labels_added} ':InUse' labels")
@@ -1169,9 +1171,9 @@ def _(button_find_connections_between_stops, graph, present):
         MERGE (s1)-[conn:{type_of_connection}]->(s2)
         SET conn.yearly = total_operations_per_year
         """
-    
+
         _modes_of_transport = [("BusTrip", "BUS_CONNECTS_TO"), ("TramTrip", "TRAM_CONNECTS_TO"), ("SubwayTrip", "SUBWAY_CONNECTS_TO")]
-    
+
         for trip, connection in _modes_of_transport:
             print(f"Finding '{trip}' connections...")
             # We need to do string interpolation here since Neo4j does not allow parameters in labels
@@ -1382,7 +1384,7 @@ def _(button_query_triples, graph, learning, present, triples_queries):
 
     def _query_triples():
         fact_triples = graph.query_triples(triples_queries)
-    
+
         # Index the entities/relations in the triples and split them into training, validation and testing data 
         training, validation, testing = learning.generate_training_set(fact_triples)
 
@@ -1493,10 +1495,10 @@ def _(
     def _train_model_rotate():
         _model = 'RotatE'
         _save_path = f"trained_models/{_model}"
-    
+
         rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
         learning.save_training_results(rotate_results, _save_path, validation_triples=validation, testing_triples=testing)
-    
+
         # Display some immediate results to assess the quality of the trained model
         learning.summarize_training_metrics(rotate_results.metric_results)
 
@@ -1537,10 +1539,10 @@ def _(
     def _train_model_complex():
         _model = 'ComplEx'
         _save_path = f"trained_models/{_model}"
-    
+
         complex_results = learning.train_model(training, validation, testing, training_configs[_model])
         learning.save_training_results(complex_results, _save_path, validation_triples=validation, testing_triples=testing)
-    
+
         # Display some immediate results to assess the quality of the trained model
         learning.summarize_training_metrics(complex_results.metric_results)
 
@@ -1571,10 +1573,10 @@ def _(graph, learning, prediction, testing, validation):
     if False:
         _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
         _stops_with_neighbours = graph.get_nearby_stops()
-    
+
         _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
         #_pred.score_potential_connections(_stops_with_neighbours)
-    
+
         _pred.predict_connection_frequency(_stops_with_neighbours)
     return
 
@@ -1589,7 +1591,7 @@ def _(mo):
 def _(learning, prediction, testing, validation):
     if False:
         _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
-    
+
         _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
         _prediction_dataframe = _pred.predict_component(head="at:49:1530:0:4", rel="TRAM_CONNECTS_TO").sort_values(by=['score'], ascending=True)
         _prediction_dataframe["tail_label"].tolist()

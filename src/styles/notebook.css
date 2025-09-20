@@ -23,27 +23,33 @@
   margin-bottom: 2.7em;
 }
 
-.marimo button[type="submit"] {
-  background-color: #2EAC0E;
-  border-color: #2EAC0E;
-  color: white;
-  font-size: 1.2rem;
-  padding: 18px 15px;
+#title {
+  font-family: var(--marimo-heading-font, 'Raleway'), sans-serif;
+  font-size: 36px;
+  text-align: center;
+  max-width: 60vw;
+  margin: auto;
+  padding: 3rem;
+  border: 1px solid rgb(229, 72, 77);
+  border-radius: 8px;
+  background-color: var(--red-2);
+  --tw-shadow: 4px 4px 0px 0px var(--tw-shadow-color, currentcolor);
+  --tw-shadow-color: color-mix(in oklab, var(--red-8) var(--tw-shadow-alpha), transparent);
+  box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
 }
 
-.marimo button[type="submit"]:hover {
-  background-color: #4ac42d;
-  border-color: #4ac42d;
-}
-
-.marimo button[type="submit"]:active {
-  background-color: #24800c;
-  border-color: #24800c;
+h1 {
+  margin-top: 3em;
+  margin-bottom: 0.65em;
 }
 
 h2 {
-  margin-top: 1.4em !important;
+  margin-top: 2.5em !important;
   margin-bottom: 0.7em !important;
+}
+
+h3 {
+  margin-top: 1.5em !important;
 }
 
 blockquote {
@@ -67,16 +73,45 @@ pre {
     background-color: #eef;
 }
 
+.run-code {
+  margin-top: -1.4em;
+  padding: 0;
+  display: flex;
+  justify-content: start;
+}
+
 .code-output-area {
-  margin: .5em;
-  border: 1px solid #482915;
-  background-color: #fff5ed;
-  border-radius: 0.6em;
-  padding: 0.4em;
-  font-size: 1.2rem;
-  line-height: 1.5rem;
+  font-family: "Jetbrains Mono", "Cascadia Code", monospace;
+  font-size: 1em;
+  line-height: 1.6rem;
+  color: #117100;
+  margin-top: -0.8cm;
+  padding: 0.6em 1em;
+  background-color: #fffbf7;
+  border: 1px solid #e8cab6;
+  border-radius: 0.4em;
+  width: 70%;
 }
 
 .code-output-line {
 
+}
+
+.marimo button[type="submit"] {
+  background-color: #248acb;
+  border-color: #248acb;
+  color: white;
+  font-size: 1.2rem;
+  padding: 18px 15px;
+  width: 70%;
+}
+
+.marimo button[type="submit"]:hover {
+  background-color: #3fa6ea;
+  border-color: #3fa6ea;
+}
+
+.marimo button[type="submit"]:active {
+  background-color: #0d7bb9;
+  border-color: #0d7bb9;
 }
