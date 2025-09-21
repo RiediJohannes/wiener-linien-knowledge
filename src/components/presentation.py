@@ -324,7 +324,7 @@ def in_output_area(container_css_class="code-output-area", line_css_class="code-
             output.flush()
 
 
-def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="code-output-area", line_css_class="code-output-line"):
+def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="code-output-area", line_css_class="code-output-line") -> Any:
     """
     Executed the given task once the run_signal changes to True. During the execution of the task, all STDOUT write
     operations are redirected to a custom HTML output area that is live-streamed to marimo using marimo.output.
@@ -345,13 +345,13 @@ def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="cod
         output = MarimoHtmlOutput(container_css_class, line_css_class)
         with redirect_stdout(output):
             try:
-                task()
+                return task()
             finally:
                 output.flush()
     else:
         # Add the presentation of a code output area before it is run here, if desired
         #mo.output.append("^ Press to run ^")
-        pass
+        return None
 
 
 def create_run_button(label="Execute query", extra_classes: str = "", **kwargs) -> mo.Html:
