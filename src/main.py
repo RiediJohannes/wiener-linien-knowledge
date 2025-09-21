@@ -142,8 +142,53 @@ def merge_nearby_stops_runner(present):
 
 
 @app.cell
-def merge_nearby_stops(button_merge_nearby_stops, geo, graph, present):
+def _(button_merge_nearby_stops, graph, mo):
+    merging_nearby_stops_is_safe: bool = False
+    button_continue_merging_nearby_stops = mo.ui.run_button(label="Continue Merging", kind="danger")
+
+    if button_merge_nearby_stops.value:
+        query_check_if_clusters_exist = """
+        OPTIONAL MATCH (c:ClusterStop)
+        OPTIONAL MATCH ()-[r:IN_CLUSTER]->()
+        RETURN count(DISTINCT c) + count(DISTINCT r)
+        """
+        _num_cluster_elements: int = graph.execute_operation_returning_count(query_check_if_clusters_exist)
+    
+        if _num_cluster_elements > 0:
+            mo.output.append(mo.md("**WARNING:** The knowledge graph already contains some clusters. To avoid data inconsistencies, this operation will delete all of existing clusters before creating new ones from scratch.\nDo you want to continue?"))
+            mo.output.append(button_continue_merging_nearby_stops)
+        else:
+            merging_nearby_stops_is_safe = True
+    return button_continue_merging_nearby_stops, merging_nearby_stops_is_safe
+
+
+@app.cell
+def merge_nearby_stops(
+    button_continue_merging_nearby_stops,
+    geo,
+    graph,
+    merging_nearby_stops_is_safe: bool,
+    present,
+):
     def _merge_nearby_stops():
+        # First, delete existing clusters
+        print("Removing existing clusters...")
+        operation_delete_existing_clusters = """
+        MATCH cluster=()-[r:IN_CLUSTER]->()
+        DELETE r
+        """
+        _summary = graph.execute_operation(operation_delete_existing_clusters)
+        print(f"Deleted {_summary.counters.relationships_deleted} 'IN_CLUSTER' relationships.")
+    
+        operation_delete_clusterstop_labels = """
+        MATCH (c:ClusterStop)
+        REMOVE c:ClusterStop
+        """
+        _summary = graph.execute_operation(operation_delete_clusterstop_labels)
+        print(f"Removed {_summary.counters.labels_removed} 'ClusterStop' labels from nodes.")
+
+        # Next, we detect and create new clusters
+        print("\nCreating new clusters...")
         _stops = graph.get_stops()
         print(f"Queried {len(_stops)} stops from the graph")
 
@@ -152,10 +197,13 @@ def merge_nearby_stops(button_merge_nearby_stops, geo, graph, present):
 
         _summary = graph.cluster_stops(_stop_clusters)
         print(f"""\nOperation successful:
-        Created {_summary.counters.relationships_created} relationships
-        Added {_summary.counters.labels_added} labels""")
+        - Created {_summary.counters.relationships_created} relationships
+        - Added {_summary.counters.labels_added} labels""")
 
-    present.run_code(button_merge_nearby_stops.value, _merge_nearby_stops)
+        # Important: Reset this boolean flag, since now it's not safe anymore to create new clusters
+        merging_nearby_stops_is_safe = False
+        
+    present.run_code(merging_nearby_stops_is_safe or button_continue_merging_nearby_stops.value, _merge_nearby_stops)
     return
 
 
@@ -530,7 +578,9 @@ def _(
 def _(mo):
     mo.md(
         r"""
-    ### Exploring Stop Clusters
+    ----
+
+    ### **Visualization:** Exploring Stop Clusters
 
     The following interactive map displays all stops we parsed from the GTFS data as well as the clusters we formed from geographically close stops. You can also explore which stops are considered nearby a specific subdistrict.
     """
@@ -692,7 +742,7 @@ def _(
 def _(mo, present, stops_map_get_data, stops_map_search_button):
     _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12)
 
-    _stack = [mo.md(f"**Press 'Search' to run query**")]
+    _stack = [mo.md(f"_Press 'Search' to run query_")]
     # Add the stops to the map
     if (stops_map_search_button.value):
         _stops, _description = stops_map_get_data()
@@ -731,6 +781,8 @@ def _(graph, mo, present):
 def _(mo):
     mo.md(
         r"""
+    ----
+
     ## Organizing City Districts
 
     ### Determine neighbouring subdistricts
@@ -1182,7 +1234,7 @@ def _(button_find_connections_between_stops, graph, present):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# Explore current data""")
+    mo.md(r"""# Explore Transit Conections""")
     return
 
 
