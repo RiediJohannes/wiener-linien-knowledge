@@ -1,12 +1,10 @@
 import html
 import io
 from contextlib import contextmanager, redirect_stdout
-from dataclasses import dataclass
 from enum import Flag, auto
 from typing import Callable, Any
 
 import folium
-import marimo
 import marimo as mo
 from shapely import MultiPoint
 
@@ -164,12 +162,73 @@ class TransportMap:
             if include_nodes:
                 self.add_transit_nodes([conn.from_stop, conn.to_stop])
 
+    def add_legend(self, title: str, entries: list[tuple[str, str]]):
+        legend_html = self._create_color_map_legend(title, entries)
+        self.base.get_root().html.add_child(folium.Element(legend_html))
+
     def as_html(self) -> str:
         # Save the map to an HTML file
         # self.base.save("stops_map.html")
 
         return self.base._repr_html_()
 
+    @staticmethod
+    def _create_color_map_legend(title: str, entries: list[tuple[str, str]]) -> str:
+        legend_items = [f"<li><span style='background:{colour};opacity:0.85;'></span>{name}</li>"
+                        for name, colour in entries]
+        legend_items_html = '\n'.join(legend_items)
+
+        return f'''
+        <div id='maplegend' class='maplegend' 
+            style='position: absolute; z-index:9999; border:2px solid grey; background-color:rgba(255, 255, 255, 0.9);
+             border-radius:6px; padding: 10px; font-size:12px; font-family: Arial; right: 20px; bottom: 20px;'>
+
+        <div class='legend-title'><b>{title}</b></div>
+        <div class='legend-scale'>
+          <ul class='legend-labels'>
+            {legend_items_html}
+          </ul>
+        </div>
+        </div>
+
+        <style type='text/css'>
+          .maplegend .legend-title {{
+            text-align: left;
+            margin-bottom: 5px;
+          }}
+          .maplegend .legend-scale ul {{
+            margin: 0;
+            margin-bottom: 5px;
+            padding: 0;
+            float: left;
+            list-style: none;
+          }}
+          .maplegend .legend-scale ul li {{
+            font-size: 10px;
+            list-style: none;
+            margin-left: 0;
+            line-height: 18px;
+            margin-bottom: 2px;
+          }}
+          .maplegend ul.legend-labels li span {{
+            display: block;
+            float: left;
+            height: 16px;
+            width: 30px;
+            margin-right: 5px;
+            margin-left: 0;
+            border: 1px solid #999;
+          }}
+          .maplegend .legend-source {{
+            font-size: 8px;
+            color: #777;
+            clear: both;
+          }}
+          .maplegend a {{
+            color: #777;
+          }}
+        </style>
+        '''
 
 class MarimoHtmlOutput(io.StringIO):
     """
@@ -305,3 +364,9 @@ def create_run_button(label="Execute query", extra_classes: str = "", **kwargs) 
 
     mo.output.append(extended_button_html)
     return button
+
+def snake_to_title_case(snake_str: str, remove_words: list[str] = None) -> str:
+    if remove_words:
+        return " ".join(x.capitalize() for x in snake_str.lower().split("_") if x not in remove_words)
+    else:
+        return " ".join(x.capitalize() for x in snake_str.lower().split("_"))
