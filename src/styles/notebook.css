@@ -5,6 +5,14 @@
   --marimo-heading-font: 'Raleway', sans-serif;
   --marimo-monospace-font: 'Jetbrains Mono', 'Cascadia Code', monospace;
   --marimo-text-font: 'Atkinson Hyperlegible', 'PT Sans', sans-serif;
+
+  --destructive: hsl(0deg 100% 65%);
+  --destructive-foreground: light-dark(#eceff4, #2e3440);
+  --error: light-dark(#bf616a, #bf616a);
+  --error-foreground: light-dark(#eceff4, #2e3440);
+  --success: light-dark(#a3be8c, #a3be8c);
+  --success-foreground: light-dark(#eceff4, #2e3440);
+  --link: light-dark(#81a1c1, #88c0d0);
 }
 
 .markdown .paragraph,
@@ -98,20 +106,14 @@ pre {
 }
 
 .marimo button[type="submit"] {
-  background-color: #248acb;
-  border-color: #248acb;
-  color: white;
+  --secondary: #2e85c9;
+  --secondary-foreground: white;
+  border-width: 0 !important;
   font-size: 1.2rem;
   padding: 18px 15px;
   width: 70%;
 }
 
-.marimo button[type="submit"]:hover {
-  background-color: #3fa6ea;
-  border-color: #3fa6ea;
-}
-
 .marimo button[type="submit"]:active {
-  background-color: #0d7bb9;
-  border-color: #0d7bb9;
+  --secondary: #1379b4;
 }
