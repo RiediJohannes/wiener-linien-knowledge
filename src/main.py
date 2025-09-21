@@ -652,7 +652,7 @@ def _(mo, stops_map_district_num_combobox, subdistricts_per_dist):
 @app.cell
 def _(mo):
     # Define a state object to hold the currently open tab of the stops_map_tabs component
-    get_stops_map_tab, set_stops_map_tab = mo.state("All stops")
+    get_stops_map_tab, set_stops_map_tab = mo.state("All Stops")
     return get_stops_map_tab, set_stops_map_tab
 
 
@@ -738,18 +738,29 @@ def _(
 
 @app.cell
 def _(mo, present, stops_map_get_data, stops_map_search_button):
-    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12)
+    _stack = []
 
-    _stack = [mo.md(f"_Press 'Search' to run query_")]
-    # Add the stops to the map
+    # Query the requested stops and display them on a map
     if stops_map_search_button.value:
-        _stops, _description = stops_map_get_data()
-        _transport_map.add_stops(_stops)
-        _heading = mo.md(f"### **{_description}**")
+        with mo.status.spinner(title="Running query..."):
+            _stops, _description = stops_map_get_data()
 
-        # Display the results
-        _iframe = mo.iframe(_transport_map.as_html(), height=650)
-        _stack = [_heading, _iframe]
+            _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12)
+            _transport_map.add_stops(_stops)
+            _heading = mo.md(f"**{_description}**")
+    
+            # Display the results
+            _iframe = mo.iframe(_transport_map.as_html(), height=650)
+            _stack = [_heading, _iframe]
+    else:
+        html_placeholder = mo.Html(f"""
+        <div style="width: 100%; height: 400px; background-color: #EEE; color: #666; border-radius: 6px; display: flex; justify-content: center; align-items: center">
+            <span style="font-size: 1.4em; font-style: italic">
+                Press 'Search' button to query stops
+            </span>
+        <div>
+        """)
+        _stack = [html_placeholder]
 
     mo.vstack(_stack)
     return
