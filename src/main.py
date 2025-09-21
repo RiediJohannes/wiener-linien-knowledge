@@ -19,7 +19,7 @@ def imports():
     return geo, graph, learning, mo, prediction, present, print_raw
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.Html("""
     <div id="title">
@@ -153,9 +153,9 @@ def _(button_merge_nearby_stops, graph, mo):
         RETURN count(DISTINCT c) + count(DISTINCT r)
         """
         _num_cluster_elements: int = graph.execute_operation_returning_count(query_check_if_clusters_exist)
-    
+
         if _num_cluster_elements > 0:
-            mo.output.append(mo.md("**WARNING:** The knowledge graph already contains some clusters. To avoid data inconsistencies, this operation will delete all of existing clusters before creating new ones from scratch.\nDo you want to continue?"))
+            mo.output.append(mo.md("**WARNING:** The knowledge graph already contains some clusters. To avoid data inconsistencies, this operation will delete all existing clusters before creating new ones from scratch.\nDo you want to continue?"))
             mo.output.append(button_continue_merging_nearby_stops)
         else:
             merging_nearby_stops_is_safe = True
@@ -179,7 +179,7 @@ def merge_nearby_stops(
         """
         _summary = graph.execute_operation(operation_delete_existing_clusters)
         print(f"Deleted {_summary.counters.relationships_deleted} 'IN_CLUSTER' relationships.")
-    
+
         operation_delete_clusterstop_labels = """
         MATCH (c:ClusterStop)
         REMOVE c:ClusterStop
@@ -202,7 +202,7 @@ def merge_nearby_stops(
 
         # Important: Reset this boolean flag, since now it's not safe anymore to create new clusters
         merging_nearby_stops_is_safe = False
-        
+
     present.run_code(merging_nearby_stops_is_safe or button_continue_merging_nearby_stops.value, _merge_nearby_stops)
     return
 
@@ -638,7 +638,7 @@ def _(graph, mo):
 
 @app.cell
 def _(mo, stops_map_district_num_combobox, subdistricts_per_dist):
-    _available_subdistricts = subdistricts_per_dist.get(stops_map_district_num_combobox.value, [1])
+    _available_subdistricts = subdistricts_per_dist.get(stops_map_district_num_combobox.value, [])
     stops_map_subdistrict_num_combobox = mo.ui.dropdown(
         options=_available_subdistricts,
         label="Subdistrict:"
@@ -1234,46 +1234,89 @@ def _(button_find_connections_between_stops, graph, present):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""# Explore Transit Conections""")
+    mo.md(
+        r"""
+    ----
+
+    ## **Visualization:** Explore Transit Connections
+
+    Thus, we have completed all steps towards our overall goal of predicting missing transit connections. Below, you can find an interactive map to **explore key information about transit connections** that we have derived from out initial dataset.  
+    These views of the data are a core subset of what we will use to train knowledge graph embedding models on in the next phase of our workflow.
+    """
+    )
     return
 
 
 @app.cell
-def _(graph, mo, present):
-    _nodes = graph.get_stops(with_clusters=True, only_in_use=True)
+def _(mo):
+    connections_map_tabs = mo.ui.tabs({
+        "Connection Types": mo.vstack([
+            mo.md("""_Shows the web of bus, tram and subway connections throughout Vienna._"""),
+        ]),
+        "Connection Frequency": mo.vstack([
+            mo.md("_Shows all direct transit connections and colours them by how often they are operated across the whole year._")
+        ])
+    })
 
-    _connections_query = """
-    MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
-    WHERE s.id < t.id AND c.yearly > 4 * 365
-    RETURN DISTINCT s as from, t as to, type(c) as label
-    """
-    _connections = graph.get_connections(_connections_query)
+    connections_map_tabs
+    return (connections_map_tabs,)
 
-    _connections_query = """
-    MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
-    WHERE s1.id < s2.id AND conn.yearly > 4 * 365
-    WITH conn, s1, s2,
-      CASE 
-        WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
-        WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
-        WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
-        WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
-        WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
-        ELSE 'RARELY_TO'
-      END as level_of_service
-    RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
-    """
-    #_connections = graph.get_connections(_connections_query)
 
-    _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
-                                          visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
-    _transport_map.add_transit_nodes(_nodes)
-    _transport_map.add_transit_connections(_connections)
+@app.cell(hide_code=True)
+def _(connections_map_tabs, graph):
+    # Behind the scenes: Query the respective data based on the user-selection
+    def connections_map_get_data():
+        active_tab = connections_map_tabs.value
+        connections = []
+        nodes = graph.get_stops(with_clusters=True, only_in_use=True)
+
+        if active_tab == "Connection Types":
+            connections_query = """
+            MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
+            WHERE s.id < t.id AND c.yearly > 4 * 365
+            RETURN DISTINCT s as from, t as to, type(c) as label
+            """
+            connections = graph.get_connections(connections_query)
+        elif active_tab == "Connection Frequency":
+            connections_query = """
+            MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
+            WHERE s1.id < s2.id AND conn.yearly > 4 * 365
+            WITH conn, s1, s2,
+              CASE 
+                WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
+                WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
+                WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
+                WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
+                WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
+                ELSE 'RARELY_TO'
+              END as level_of_service
+            RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
+            """
+            connections = graph.get_connections(connections_query)
+
+        return nodes, connections
+    return (connections_map_get_data,)
+
+
+@app.cell
+def _(connections_map_get_data, mo, present):
+    def display_connections_map():
+        _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
+                                              visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
+        _nodes, _connections = connections_map_get_data()
+        _transport_map.add_transit_nodes(_nodes)
+        _transport_map.add_transit_connections(_connections)
+    
+        _stop_disclaimer = mo.Html(f"""
+        <div width="100%">
+            {mo.md("_Note: The map considers connections between **stop clusters** as opposed to individual stops. Therefore, the stops shown as black dots on the map are (in most cases) not exact stopping locations but the average position of the whole stop cluster._")}
+        </div>
+        """)
+    
+        return mo.vstack([mo.iframe(_transport_map.as_html(), height=650), _stop_disclaimer])
 
     # Visible output
-    _heading = mo.md("**Explore transit connections**")
-    _iframe = mo.iframe(_transport_map.as_html(), height=650)
-    mo.vstack([_heading, _iframe])
+    mo.lazy(lambda : display_connections_map(), show_loading_indicator=True)
     return
 
 
@@ -1281,9 +1324,11 @@ def _(graph, mo, present):
 def _(mo):
     mo.md(
         r"""
+    ----
+
     # Knowledge Graph Embeddings
 
-    Now, we are ready for this project's main goal, which is predicting missing connections in Vienna's public transport network. As the wording suggests, this becomes a classic **link prediction problem** in our knowledge graph. A key tool to tackle such problems are knowledge graph embeddings. In this chapter, we will use the popular KG embedding library **PyKEEN**.
+    Now, our knowledge graph is ready for this project's main goal, which is **predicting missing connections in Vienna's public transport network**. As the wording suggests, this becomes a classic **link prediction problem** in our knowledge graph. A key tool to tackle such problems are knowledge graph embeddings. In this chapter, we will use the popular KG embedding library **PyKEEN**.
     """
     )
     return
