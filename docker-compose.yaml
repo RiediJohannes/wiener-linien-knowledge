@@ -41,7 +41,7 @@ services:
     command: ["initializer", "--abort-if-present"]
     restart: "no"
 
-  marimo-app:
+  notebook-app:
     build: ./notebook
     depends_on:
       neo4j:

@@ -18,3 +18,37 @@ data sources and derived knowledge. For exploration and experimentation, the pro
 (a modern alternative to Jupyter) that offers an interactive and user-friendly interface to work with the knowledge graph.
 
 For the knowledge graph embeddings, two different embedding models were compared, namely **RotatE** and **ComplEx**.
+
+The project deployment is orchestrated through **docker**. All components of the project provide a Dockerfile
+to create a docker image of the respective component and the whole system is reliably deployed via the given
+**docker compose** file.
+
+## Project Structure
+
+The project consists of two subprojects:
+- **KG Initializer** (`./initializer`)  
+A rust script that initializes the knowledge graph, i.e., fills a local neo4j instance with the initial dataset
+located in `./data`.</br></br>
+- **Notebook App** `./notebook`  
+Marimo webapp that guides the user through the creation and evolution of the knowledge graph and exploration
+of its knowledge through interactive queries. The notebook also offers a graphical user interface to train KG
+embedding models and visualize a model's predictions regarding public transport connections in Vienna.
+
+## Deployment
+
+First, make sure [docker](https://www.docker.com) is installed on your system and the docker engine is running.  
+Deploy the Wiener Linien Knowledge Graph through docker compose:
+
+```sh
+docker compose up
+```
+
+This will create and start each component in a predetermined order. In particular, it will first fetch the latest
+**neo4j** image and run it. As soon as the neo4j container is healthily running, the **KG Initializer** container is deployed.
+This container automatically fills the neo4j graph database with all initial datasets, unless the respective data is
+already present. After the Initializer has finished its job, the **Notebook App** is started.
+
+As soon as the `notebook-app` container is up and running, visit [localhost:2718](https://localhost:2718) to view
+the marimo webapp.  
+Check the status of the knowledge graph at the top of the webapp to see if all parts of the
+deployment succeeded.
