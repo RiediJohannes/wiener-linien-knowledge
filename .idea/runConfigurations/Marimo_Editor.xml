@@ -3,7 +3,7 @@
     <option name="args">
       <list>
         <option value="edit" />
-        <option value="src/main.py" />
+        <option value="notebook/src/main.py" />
       </list>
     </option>
     <option name="checkSync" value="false" />
@@ -15,7 +15,7 @@
     <option name="uvArgs">
       <list />
     </option>
-    <option name="uvSdkKey" value="uv (wiener-linien-knowledge)" />
+    <option name="uvSdkKey" value="uv (wiener-linien-knowledge) (2)" />
     <method v="2" />
   </configuration>
 </component>

@@ -2,7 +2,7 @@ import html
 import io
 from contextlib import contextmanager, redirect_stdout
 from enum import Flag, auto
-from typing import Callable, Any
+from typing import Callable, Any, Literal
 
 import folium
 import marimo as mo
@@ -354,8 +354,8 @@ def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="cod
         return None
 
 
-def create_run_button(label="Execute query", extra_classes: str = "", **kwargs) -> mo.Html:
-    button = mo.ui.run_button(label=label, kind="neutral", **kwargs)
+def create_run_button(label="Execute query", kind: Literal["neutral", "success", "warn", "danger"] = "neutral", extra_classes: str = "", **kwargs) -> mo.Html:
+    button = mo.ui.run_button(label=label, kind=kind, **kwargs)
     extended_button_html = mo.Html(f"""
     <div class="run-code {extra_classes}">
         {button}

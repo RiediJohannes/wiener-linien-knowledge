@@ -1590,7 +1590,7 @@ def _(mo):
 
 @app.cell
 def _(present):
-    button_train_model_rotate = present.create_run_button(label="Train Model RotatE", extra_classes="danger")
+    button_train_model_rotate = present.create_run_button(label="Train Model RotatE", kind="danger")
     return (button_train_model_rotate,)
 
 
@@ -1634,7 +1634,7 @@ def _(mo):
 
 @app.cell
 def _(present):
-    button_train_model_complex = present.create_run_button(label="Train Model ComplEx", extra_classes="danger")
+    button_train_model_complex = present.create_run_button(label="Train Model ComplEx", kind="danger")
     return (button_train_model_complex,)
 
 
