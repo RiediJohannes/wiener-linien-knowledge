@@ -49,6 +49,10 @@ This container automatically fills the neo4j graph database with all initial dat
 already present. After the Initializer has finished its job, the **Notebook App** is started.
 
 As soon as the `notebook-app` container is up and running, visit [localhost:2718](https://localhost:2718) to view
-the marimo webapp.  
+the marimo webapp (Note that `0.0.0.0:2718` as per the console logs of the notebook-app container will _not_ work
+on your system).  
+
 Check the status of the knowledge graph at the top of the webapp to see if all parts of the
-deployment succeeded.
+deployment succeeded:
+
+![kg-status.png](assets/kg-status.png)
