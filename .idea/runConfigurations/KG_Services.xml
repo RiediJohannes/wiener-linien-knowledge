@@ -3,6 +3,12 @@
     <deployment type="docker-compose.yml">
       <settings>
         <option name="envFilePath" value="" />
+        <option name="services">
+          <list>
+            <option value="neo4j" />
+            <option value="kg-initializer" />
+          </list>
+        </option>
         <option name="sourceFilePath" value="docker-compose.yaml" />
       </settings>
     </deployment>

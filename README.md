@@ -19,7 +19,7 @@ data sources and derived knowledge. For exploration and experimentation, the pro
 
 For the knowledge graph embeddings, two different embedding models were compared, namely **RotatE** and **ComplEx**.
 
-The project deployment is orchestrated through **docker**. All components of the project provide a Dockerfile
+The project deployment is orchestrated through [docker](https://www.docker.com). All components of the project provide a Dockerfile
 to create a docker image of the respective component and the whole system is reliably deployed via the given
 **docker compose** file.
 
