@@ -1,9 +1,11 @@
+import os
+
 import neo4j.graph
 from neo4j import GraphDatabase, ResultSummary, Record
-
 from src.components.types import SubDistrict, Stop, Connection, ClusterStop, ModeOfTransport, Frequency
 
-URI = "bolt://localhost:7687"
+
+URI = "bolt://" + os.getenv('NEO4J_URI', "localhost:7687")
 AUTH = ("neo4j", "")
 
 # Create a driver instance
