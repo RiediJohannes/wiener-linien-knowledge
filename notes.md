@@ -83,12 +83,17 @@ They were particularly fond of:
   - 13:45-
 
 
+### Report
+
+5h
+
+15:00
+
 ## Submission
 
 ### Data sources
 
-Population data:
-
+Population data:  
 https://www.data.gv.at/katalog/datasets/09e70f89-cadf-4a3b-a29a-2b3f3c6cbd71
 
 Subdistrict names:  
@@ -97,15 +102,6 @@ https://www.data.gv.at/katalog/datasets/ae8d7db5-98e9-4f86-bbec-9babfa2a4f03
 Subdistrict shapes:  
 https://www.data.gv.at/katalog/datasets/e4079286-310c-435a-af2d-64604ba9ade5
 
+
 Dockerizing my marimo app:  
 https://docs.marimo.io/guides/deploying/deploying_docker/#create-a-dockerfile
-
-
-##### Trying to make a multipage app
-
-```html
-<div style="display: flex; justify-content: space-between; width: 100%;">
-    <a href="./notebooks/test.py" style="text-decoration: none;">← Previous page</a>
-    <a href="./../src/main.py" style="text-decoration: none;">Next page →</a>
-</div>
-```

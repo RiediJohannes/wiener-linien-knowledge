@@ -36,8 +36,10 @@ services:
         condition: service_healthy
     environment:
       - NEO4J_URI=neo4j:7687  # Use service name instead of 127.0.0.1
+      - OUTPUT=static
     networks:
       - kg-network
+    tty: true
     command: ["initializer", "--abort-if-present"]
     restart: "no"
 

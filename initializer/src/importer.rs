@@ -1,8 +1,8 @@
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use neo4rs::Graph;
 use path::PathBuf;
 use std::time::Duration;
-use std::{fs, path};
+use std::{env, fs, path};
 use thiserror::Error;
 use tokio::time::Instant;
 
@@ -75,7 +75,7 @@ pub async fn db_contains_city_data(graph: &Graph) -> Result<bool, ImportError> {
 /// Writes the data from the GTFS files placed in the `/gtfs` directory into the given
 /// neo4j graph instance.
 pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
-    let multi_progress = MultiProgress::new();
+    let multi_progress = MultiProgress::with_draw_target(get_draw_target());
     let outer_spinner = multi_progress.fork_parent_spinner("Importing GTFS data into Neo4j ...".to_string());
 
     // Note: Uniqueness constraints implicitly create indexes
@@ -242,7 +242,7 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
 }
 
 pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError> {
-    let multi_progress = MultiProgress::new();
+    let multi_progress = MultiProgress::with_draw_target(get_draw_target());
     let outer_spinner = multi_progress.fork_parent_spinner("Importing Vienna city data into Neo4j ...".to_string());
 
     let local_spinner = multi_progress.fork_child_spinner("Creating indexes for subdistrict codes".to_string());
@@ -316,6 +316,16 @@ pub async fn write_population_data_into(graph: &Graph) -> Result<(), ImportError
     Ok(())
 }
 
+
+fn get_draw_target() -> ProgressDrawTarget {
+    // Reduce the refresh rate of the progress output if the STDOUT is not dynamic.
+    // This ENV flag is often used when the output does not allow for redrawing the same line
+    // using \r, and instead appends every print as a new line.
+    match env::var("OUTPUT").ok().as_deref() {
+        Some("static") => ProgressDrawTarget::stdout_with_hz(1),
+        _ => ProgressDrawTarget::stdout()
+    }
+}
 
 trait SpinnerPool {
     fn fork_spinner(&self, tick_millis: u64, start_message: String) -> ProgressBar;
