@@ -257,7 +257,7 @@ def detect_station_exits(button_merge_related_stops, graph, present):
             print("❌ WARNING: Detected some stops that are the root of a cluster but are missing the `ClusterStop` label!")
 
         """
-        MATCH (s:ClusterStop)-[:IN_CLUSTER*1..5]-(p:ClusterStop)
+        MATCH (s:ClusterStop)-[:IN_CLUSTER*1..20]-(p:ClusterStop)
         WHERE s.id <> p.id
         RETURN s.id, p.id
         """
@@ -385,50 +385,11 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    operation_delete_stops_outside_vienna = """
-    MATCH (s:Stop)
-    WHERE s.id STARTS WITH 'at:43:'
-    DETACH DELETE s
-    """
-
     mo.md(fr"""
     ## Matching stops to districts
-    Our next goal is to match each stop to Viennese registration districts they serve in order to get a rough grasp on how many people can benefit them. 
-    First, let's delete stops entirely that are located outside the Vienna city boundary. Most notably, this includes many stops of the _Badner Bahn_ that reach all the way to _Baden bei Wien_.
+    Our next goal is to match each stop to Viennese registration districts they serve in order to get a rough grasp on how many people can benefit them.
 
-    This is a simple task by relying again on the semantics of the stop IDs. Stops whose ID starts with `at:49` are within Vienna whereas stops with `at:43` at the beginning of their ID are located outside Vienna. Thus, we find and delete the latter.
-    ```cypher
-    {operation_delete_stops_outside_vienna}
-    ```
-    """
-    )
-    return (operation_delete_stops_outside_vienna,)
-
-
-@app.cell
-def _(present):
-    button_delete_stops_outside_vienna = present.create_run_button(label="Delete Stops outside Viena")
-    return (button_delete_stops_outside_vienna,)
-
-
-@app.cell
-def _(
-    button_delete_stops_outside_vienna,
-    graph,
-    operation_delete_stops_outside_vienna,
-    present,
-):
-    def _delete_stops_outside_vienna():
-        _summary = graph.execute_operation(operation_delete_stops_outside_vienna)
-        print(f"Deleted {_summary.counters.nodes_deleted} nodes")
-
-    present.run_code(button_delete_stops_outside_vienna.value, _delete_stops_outside_vienna)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(r"""Next, we use the geographic coordinates of the stops to match each stop to the Viennese registration districts that either contain the stop or are reasonably close to it.""")
+    First, we use the geographic coordinates of the stops to match each stop to the Viennese registration districts that either _contain_ the stop or are _reasonably close_ to it.""")
     return
 
 
@@ -463,6 +424,47 @@ def match_stops_with_districts(
         print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
 
     present.run_code(button_match_stops_to_districts.value, _match_stops_to_districts)
+    return
+
+
+@app.cell
+def _(mo):
+    operation_delete_stops_outside_vienna = """
+    MATCH (s:Stop)
+    WHERE NOT (s)-[:LOCATED_NEARBY]->(:SubDistrict)
+    DETACH DELETE s
+    """
+
+    mo.md(f"""
+    Next, we can use these newly created relationships to do some cleanup by getting rid of all stops located (significantly) outside of Vienna. Most notably, this includes many stops of the _Badner Bahn_ that reach all the way to _Baden bei Wien_. These are simply stale data that is irrelevant for our purposes of analysing the public transport within the city of Vienna. 
+
+    In particular, we simply delete all stop nodes that are **not** located nearby any Viennese subdistrict.
+    ```cypher
+    {operation_delete_stops_outside_vienna}
+    ```
+    """
+    )
+    return (operation_delete_stops_outside_vienna,)
+
+
+@app.cell
+def _(present):
+    button_delete_stops_outside_vienna = present.create_run_button(label="Delete Stops outside Vienna")
+    return (button_delete_stops_outside_vienna,)
+
+
+@app.cell
+def _(
+    button_delete_stops_outside_vienna,
+    graph,
+    operation_delete_stops_outside_vienna,
+    present,
+):
+    def _delete_stops_outside_vienna():
+        _summary = graph.execute_operation(operation_delete_stops_outside_vienna)
+        print(f"Deleted {_summary.counters.nodes_deleted} nodes")
+
+    present.run_code(button_delete_stops_outside_vienna.value, _delete_stops_outside_vienna)
     return
 
 
@@ -507,7 +509,7 @@ def _(mo):
 
 @app.cell
 def _(present):
-    button_determine_nearby_clusters = present.create_run_button(label="Determine Proximity for Clusters")
+    button_determine_nearby_clusters = present.create_run_button(label="Match Clusters to Districts")
     return (button_determine_nearby_clusters,)
 
 
@@ -714,7 +716,7 @@ def _(
 
         if active_tab == "All Stops":
             stops = graph.get_stops(with_clusters=True)
-            description = "All Stops with Clusters"
+            description = "Zoom in to see the clusters!"
         elif active_tab == "Specific Stops":
             # Parse the comma-separated stop IDs
             stop_inputs = [input.strip() for input in stops_map_stop_list_input.value.split(',') if len(input.strip()) > 0]
@@ -748,7 +750,7 @@ def _(mo, present, stops_map_get_data, stops_map_search_button):
             _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12)
             _transport_map.add_stops(_stops)
             _heading = mo.md(f"**{_description}**")
-    
+
             # Display the results
             _iframe = mo.iframe(_transport_map.as_html(), height=650)
             _stack = [_heading, _iframe]

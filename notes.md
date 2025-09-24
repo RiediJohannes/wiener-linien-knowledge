@@ -85,9 +85,8 @@ They were particularly fond of:
 
 ### Report
 
-5h
-
-15:00
+15h
+17:00
 
 ## Submission
 
