@@ -80,13 +80,13 @@ They were particularly fond of:
   - 18:00-20:00
   - 22:00-4:00
 - 22.9.
-  - 13:45-
-
+  - 13:00-15:00
+- 25.9.
+  - 17:30-
 
 ### Report
 
-15h
-17:00
+23h
 
 ## Submission
 

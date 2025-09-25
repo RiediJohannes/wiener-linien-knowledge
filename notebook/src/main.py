@@ -33,9 +33,9 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
-    # The Knowledge Graph
+    # 1. The Knowledge Graph
 
-    If you started this project as instructed (using docker compose), you should already have a running instance of the **Neo4j graph database** filled with (or currently being filled with) **geographic and demographic data** about the city of Vienna as well as a vast dataset of the city's **public transport schedule** for 2025.
+    If you started this project as instructed (using docker compose), you should already have a running instance of the **Neo4j graph database** filled with **geographic and demographic data** about the city of Vienna as well as a vast dataset of the city's **public transport schedule** for 2025.
 
     In particular, the initial data encompasses a general transit feed specification (GTFS) dataset by Wiener Linien GmbH & Co KG that accurately describes all public transport operations by Wiener Linien from 15.12.2024 to 13.12.2025. Additionally, the database contains rich information about Vienna's registration districts (subdistricts), which includes the subdistricts' naming, their population and area, as well as their geographic coordinates. This collection of data has been mapped from various CSV files (7 files for GTFS, 3 files for the subdistricts) into a graph structure to form the **Wiener Linien Knowledge Graph**.
 
@@ -125,11 +125,14 @@ def _(mo):
 def _(mo):
     mo.md(
         r"""
-    # Knowledge graph evolution
-    Next, we obtain new knowledge from our data.
+    # 2. Knowledge graph evolution
+    So far, we have only mapped (a subset of) the source data into a graph-based database schema. Unfortunately, this raw data is not very insightful for our goal of predicting missing transit connections. Therefore, in the following we set out on a **journey of evolving this knowledge graph** into a form that aligns with our goals.
+
+    ### The Problem
+    The GTFS data format looks at the transit network from a very operational point of view. It meticulously splits every route (e.g. Bus 52A) into multiple trips (e.g. 52A to Jägerwaldsiedlung on Saturdays at 5 pm) depending on their schedule/path and records the exact stop locations – down to the bus platform or side of the road – of these trips. Meanwhile, this project aims to assess the **level of service** throughout various neighbourhoods in Vienna. It does not matter if a passenger gets picked up by Tram 7 or Tram 11, neither do they particularly care if an alternative connection stops 50m down the road, as long as it gets them to their destination. Thus, the data needs to be adapted accordingly.
 
     ## Merging geographically related stops
-    In the first step, we detect all groups of nearby stops that practically function like one unified stop.
+    In the first step, we detect all sets of stops that practically _function like one unified stop_ due to their geographic proximity. We call these **stop clusters**. The following operation bundles lots of stops that are geographically very close to each other, while still enforcing some upper limits on the diameter of such clusters to prevent the formation of long chains.
     """
     )
     return
@@ -170,22 +173,23 @@ def merge_nearby_stops(
     merging_nearby_stops_is_safe: bool,
     present,
 ):
-    def _merge_nearby_stops():
-        # First, delete existing clusters
-        print("Removing existing clusters...")
-        operation_delete_existing_clusters = """
-        MATCH cluster=()-[r:IN_CLUSTER]->()
-        DELETE r
-        """
-        _summary = graph.execute_operation(operation_delete_existing_clusters)
-        print(f"Deleted {_summary.counters.relationships_deleted} 'IN_CLUSTER' relationships.")
-
-        operation_delete_clusterstop_labels = """
-        MATCH (c:ClusterStop)
-        REMOVE c:ClusterStop
-        """
-        _summary = graph.execute_operation(operation_delete_clusterstop_labels)
-        print(f"Removed {_summary.counters.labels_removed} 'ClusterStop' labels from nodes.")
+    def _merge_nearby_stops(delete_existing=False):
+        if delete_existing:
+            # First, delete existing clusters
+            print("Removing existing clusters...")
+            operation_delete_existing_clusters = """
+            MATCH cluster=()-[r:IN_CLUSTER]->()
+            DELETE r
+            """
+            _summary = graph.execute_operation(operation_delete_existing_clusters)
+            print(f"Deleted {_summary.counters.relationships_deleted} 'IN_CLUSTER' relationships.")
+    
+            operation_delete_clusterstop_labels = """
+            MATCH (c:ClusterStop)
+            REMOVE c:ClusterStop
+            """
+            _summary = graph.execute_operation(operation_delete_clusterstop_labels)
+            print(f"Removed {_summary.counters.labels_removed} 'ClusterStop' labels from nodes.")
 
         # Next, we detect and create new clusters
         print("\nCreating new clusters...")
@@ -201,7 +205,8 @@ def merge_nearby_stops(
         - Added {_summary.counters.labels_added} labels""")
 
 
-    present.run_code(merging_nearby_stops_is_safe or button_continue_merging_nearby_stops.value, _merge_nearby_stops)
+    present.run_code(merging_nearby_stops_is_safe or button_continue_merging_nearby_stops.value, _merge_nearby_stops,
+                     delete_existing=button_continue_merging_nearby_stops.value)
     return
 
 
@@ -209,7 +214,7 @@ def merge_nearby_stops(
 def _(mo):
     mo.md(
         r"""
-    This bundles lots of stops that are geographically very close to each other, while still enforcing some upper limits on the diameter of such clusters to prevent the formation of long chains. However, these constraints might consider some stops (exits/platforms) separate that officially belong to the same station but are particularly far apart.
+    However, these constraints might consider some stops (exits/platforms) separate that officially belong to the same station but are particularly far apart.
 
     ### Merging hierarchichally related stops
 
@@ -385,11 +390,14 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(fr"""
+    mo.md(
+        fr"""
     ## Matching stops to districts
     Our next goal is to match each stop to Viennese registration districts they serve in order to get a rough grasp on how many people can benefit them.
 
-    First, we use the geographic coordinates of the stops to match each stop to the Viennese registration districts that either _contain_ the stop or are _reasonably close_ to it.""")
+    First, we use the geographic coordinates of the stops to match each stop to the Viennese registration districts that either _contain_ the stop or are _reasonably close_ to it.
+    """
+    )
     return
 
 
@@ -427,7 +435,7 @@ def match_stops_with_districts(
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     operation_delete_stops_outside_vienna = """
     MATCH (s:Stop)
@@ -1249,7 +1257,7 @@ def _(mo):
         r"""
     ----
 
-    # Knowledge Graph Embeddings
+    # 3. Knowledge Graph Embeddings
 
     Now, our knowledge graph is ready for this project's main goal, which is **predicting missing connections in Vienna's public transport network**. As the wording suggests, this becomes a classic **link prediction problem** in our knowledge graph. A key tool to tackle such problems are knowledge graph embeddings. In this chapter, we will use the popular KG embedding library **PyKEEN**.
     """
@@ -1413,7 +1421,7 @@ def _(mo):
         r"""
     ### **Visualization:** Explore Transit Connections
 
-    Below, you can find an interactive map to **explore key information about transit connections** that we have derived from out initial dataset.  
+    Below, you can find an interactive map to **explore key information about transit connections** that we have derived from our initial dataset.  
     These views of the data are a core subset of what we will use to train knowledge graph embedding models on in the next phase of our workflow.
     """
     )

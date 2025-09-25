@@ -324,7 +324,7 @@ def in_output_area(container_css_class="code-output-area", line_css_class="code-
             output.flush()
 
 
-def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="code-output-area", line_css_class="code-output-line") -> Any:
+def run_code(run_signal: bool, task: Callable[[Any], Any], container_css_class="code-output-area", line_css_class="code-output-line", **kwargs) -> Any:
     """
     Executed the given task once the run_signal changes to True. During the execution of the task, all STDOUT write
     operations are redirected to a custom HTML output area that is live-streamed to marimo using marimo.output.
@@ -345,7 +345,7 @@ def run_code(run_signal: bool, task: Callable[[], Any], container_css_class="cod
         output = MarimoHtmlOutput(container_css_class, line_css_class)
         with redirect_stdout(output):
             try:
-                return task()
+                return task(**kwargs)
             finally:
                 output.flush()
     else:
