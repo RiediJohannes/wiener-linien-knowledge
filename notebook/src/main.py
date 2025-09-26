@@ -1588,6 +1588,46 @@ def _():
     return (training_configs,)
 
 
+@app.cell
+def _(mo):
+    mo.md(r"""The following table shows the **training configuration** used for each model:""")
+    return
+
+
+@app.cell
+def _(training_configs):
+    import pandas as pd
+
+    def flatten_config(data, parent_key=''):
+        items = {}
+        for key, val in data.items():
+            if key == 'model':
+                continue
+            new_key = f"{parent_key}.{key}" if parent_key else key
+            new_key = new_key.replace("_kwargs", "")
+            if isinstance(val, dict):
+                items.update(flatten_config(val, new_key))
+            else:
+                items[new_key] = val
+        return items
+
+    flat_config = flatten_config(training_configs['TransE'])
+    df = pd.DataFrame.from_dict(flat_config, orient='index', columns=['Value'])
+    df.index.name = 'Parameter'
+
+    # Flatten each model's config
+    flattened_configs = {}
+    for model, config in training_configs.items():
+        flattened_configs[model] = flatten_config(config)
+
+    df = pd.DataFrame(flattened_configs)
+    df.index.name = 'Parameter'
+    df = df.fillna('default') # Replace NaN values with empty string
+
+    df
+    return
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
