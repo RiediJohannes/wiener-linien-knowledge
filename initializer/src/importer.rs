@@ -103,6 +103,8 @@ pub async fn write_gtfs_data_into(graph: &Graph) -> Result<(), ImportError> {
         ("(ex:ServiceException)", "(ex.service_id)"),
         ("(s:Stop)", "(s.lon)"),
         ("(s:Stop)", "(s.lat)"),
+        ("(s:ClusterStop)", "(s.cluster_lon)"),
+        ("(s:ClusterStop)", "(s.cluster_lat)"),
         ("()-[at:STOPS_AT]-()", "(at.stop_sequence)"),
     ];
     for (node, prop) in index_queries {

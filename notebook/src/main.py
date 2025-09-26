@@ -183,7 +183,7 @@ def merge_nearby_stops(
             """
             _summary = graph.execute_operation(operation_delete_existing_clusters)
             print(f"Deleted {_summary.counters.relationships_deleted} 'IN_CLUSTER' relationships.")
-    
+
             operation_delete_clusterstop_labels = """
             MATCH (c:ClusterStop)
             REMOVE c:ClusterStop
@@ -1255,6 +1255,107 @@ def _(button_find_connections_between_stops, graph, present):
 def _(mo):
     mo.md(
         r"""
+    ---
+
+    ### **Visualization:** Explore Transit Connections
+
+    Again, let's visualize the fruits of our work! Below, you can find an interactive map to **explore key information about transit connections** that we have derived from our initial dataset.  
+    These views of the data are a core subset of what we will use to train knowledge graph embedding models on in the next phase of our workflow.
+    """
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    connections_map_tabs = mo.ui.tabs({
+        "Connection Types": mo.vstack([
+            mo.md("""_Shows the web of bus, tram and subway connections throughout Vienna._"""),
+        ]),
+        "Connection Frequency": mo.vstack([
+            mo.md(
+                "_Shows all direct transit connections and colours them by how often they are operated across the whole year._")
+        ])
+    })
+
+    connections_map_tabs
+    return (connections_map_tabs,)
+
+
+@app.cell(hide_code=True)
+def _(connections_map_tabs, graph, present):
+    # Behind the scenes: Query the respective data based on the user-selection
+    def connections_map_get_data():
+        active_tab = connections_map_tabs.value
+        connections = []
+        nodes = graph.get_stops(with_clusters=True, only_in_use=True)
+        legend_config = ("Legend", [("key", "val")])
+
+        if active_tab == "Connection Types":
+            connections_query = """
+            MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
+            WHERE s.id < t.id AND c.yearly > 4 * 365
+            RETURN DISTINCT s as from, t as to, type(c) as label
+            """
+            connections = graph.get_connections(connections_query)
+
+            legend_entries = [(present.snake_to_title_case(conn.name), colour)
+                              for conn, colour in list(present.TransportMap.connection_colours.items())[:-1]]
+            legend_config = ("Mode of Transport", legend_entries)
+
+        elif active_tab == "Connection Frequency":
+            connections_query = """
+            MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
+            WHERE s1.id < s2.id AND conn.yearly > 4 * 365
+            WITH conn, s1, s2,
+              CASE 
+                WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
+                WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
+                WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
+                WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
+                WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
+                ELSE 'RARELY_TO'
+              END as level_of_service
+            RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
+            """
+            connections = graph.get_connections(connections_query)
+
+            legend_entries = [(present.snake_to_title_case(conn.name, remove_words=["to"]), colour)
+                              for conn, colour in list(present.TransportMap.frequency_colours.items())[:-1]]
+            legend_config = ("Connection Frequency", legend_entries)
+
+        return nodes, connections, legend_config
+    return (connections_map_get_data,)
+
+
+@app.cell
+def _(connections_map_get_data, mo, present):
+    def display_connections_map():
+        transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
+                                             visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
+        nodes, connections, legend_config = connections_map_get_data()
+        transport_map.add_transit_nodes(nodes)
+        transport_map.add_transit_connections(connections)
+
+        transport_map.add_legend(legend_config[0], legend_config[1])
+
+        stop_disclaimer = mo.Html(f"""
+        <div width="100%">
+            {mo.md("**Note:** The map considers connections between **stop clusters** as opposed to individual stops. Therefore, the stops shown as black dots on the map are (in most cases) not exact stopping locations but the average position of the whole stop cluster.   This is exactly why we created stop clusters in the first place.")}
+        </div>
+        """)
+
+        return mo.vstack([mo.iframe(transport_map.as_html(), height=650), stop_disclaimer])
+
+    # Visible output
+    mo.lazy(lambda: display_connections_map(), show_loading_indicator=True)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(
+        r"""
     ----
 
     # 3. Knowledge Graph Embeddings
@@ -1388,6 +1489,8 @@ def _(mo):
     ```cypher
     {triples_queries["Classify connections by frequency"]}
     ```
+
+    _Sidenote: The same categories for the frequency of direct connections between two stops have already been used in the connection frequency map above._
     """
     )
     return (triples_queries,)
@@ -1413,105 +1516,6 @@ def _(button_query_triples, graph, learning, present, triples_queries):
     else:
         training, validation, testing = ([], [], [])
     return testing, training, validation
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md(
-        r"""
-    ### **Visualization:** Explore Transit Connections
-
-    Below, you can find an interactive map to **explore key information about transit connections** that we have derived from our initial dataset.  
-    These views of the data are a core subset of what we will use to train knowledge graph embedding models on in the next phase of our workflow.
-    """
-    )
-    return
-
-
-@app.cell
-def _(mo):
-    connections_map_tabs = mo.ui.tabs({
-        "Connection Types": mo.vstack([
-            mo.md("""_Shows the web of bus, tram and subway connections throughout Vienna._"""),
-        ]),
-        "Connection Frequency": mo.vstack([
-            mo.md(
-                "_Shows all direct transit connections and colours them by how often they are operated across the whole year._")
-        ])
-    })
-
-    connections_map_tabs
-    return (connections_map_tabs,)
-
-
-@app.cell(hide_code=True)
-def _(connections_map_tabs, graph, present):
-    # Behind the scenes: Query the respective data based on the user-selection
-    def connections_map_get_data():
-        active_tab = connections_map_tabs.value
-        connections = []
-        nodes = graph.get_stops(with_clusters=True, only_in_use=True)
-        legend_config = ("Legend", [("key", "val")])
-
-        if active_tab == "Connection Types":
-            connections_query = """
-            MATCH (s:Stop)-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t:Stop)
-            WHERE s.id < t.id AND c.yearly > 4 * 365
-            RETURN DISTINCT s as from, t as to, type(c) as label
-            """
-            connections = graph.get_connections(connections_query)
-
-            legend_entries = [(present.snake_to_title_case(conn.name), colour)
-                              for conn, colour in list(present.TransportMap.connection_colours.items())[:-1]]
-            legend_config = ("Mode of Transport", legend_entries)
-
-        elif active_tab == "Connection Frequency":
-            connections_query = """
-            MATCH (s1:Stop)-[conn:SUBWAY_CONNECTS_TO|BUS_CONNECTS_TO|TRAM_CONNECTS_TO]-(s2:Stop)
-            WHERE s1.id < s2.id AND conn.yearly > 4 * 365
-            WITH conn, s1, s2,
-              CASE 
-                WHEN conn.yearly > 105_000 THEN 'NONSTOP_TO'
-                WHEN conn.yearly > 75_000 THEN 'VERY_FREQUENTLY_TO'
-                WHEN conn.yearly > 50_000 THEN 'FREQUENTLY_TO'
-                WHEN conn.yearly > 30_000 THEN 'REGULARLY_TO'
-                WHEN conn.yearly > 8_000 THEN 'OCCASIONALLY_TO'
-                ELSE 'RARELY_TO'
-              END as level_of_service
-            RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
-            """
-            connections = graph.get_connections(connections_query)
-
-            legend_entries = [(present.snake_to_title_case(conn.name, remove_words=["to"]), colour)
-                              for conn, colour in list(present.TransportMap.frequency_colours.items())[:-1]]
-            legend_config = ("Connection Frequency", legend_entries)
-
-        return nodes, connections, legend_config
-    return (connections_map_get_data,)
-
-
-@app.cell
-def _(connections_map_get_data, mo, present):
-    def display_connections_map():
-        transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
-                                             visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
-        nodes, connections, legend_config = connections_map_get_data()
-        transport_map.add_transit_nodes(nodes)
-        transport_map.add_transit_connections(connections)
-
-        transport_map.add_legend(legend_config[0], legend_config[1])
-
-        stop_disclaimer = mo.Html(f"""
-        <div width="100%">
-            {mo.md("**Note:** The map considers connections between **stop clusters** as opposed to individual stops. Therefore, the stops shown as black dots on the map are (in most cases) not exact stopping locations but the average position of the whole stop cluster.   This is exactly why we created stop clusters in the first place.")}
-        </div>
-        """)
-
-        return mo.vstack([mo.iframe(transport_map.as_html(), height=650), stop_disclaimer])
-
-    # Visible output
-    mo.lazy(lambda: display_connections_map(), show_loading_indicator=True)
-    return
 
 
 @app.cell(hide_code=True)
