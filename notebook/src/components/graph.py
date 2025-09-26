@@ -219,6 +219,7 @@ def query_triples(names_queries: dict[str, str]) -> list[tuple[str, str, str]]:
         triples.extend([(triple["head"], triple["rel"], triple["tail"]) for triple in records])
         print(f"✅ Received {len(records)} triples")
 
+    print("Finished collecting training triples!")
     return triples
 
 def execute_operation(cypher_operation, **params) -> ResultSummary | None:

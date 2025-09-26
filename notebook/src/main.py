@@ -1594,7 +1594,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(training_configs):
     import pandas as pd
 
@@ -1652,6 +1652,7 @@ def _(present):
 def _(
     button_train_model_rotate,
     learning,
+    mo,
     present,
     testing,
     training,
@@ -1659,6 +1660,13 @@ def _(
     validation,
 ):
     def _train_model_rotate():
+        if not training:
+            return mo.output.append(mo.callout(mo.md("""
+            **⚠️ Missing training data ⚠️**  
+            Training data has not been defined yet. Please execute the 'Query Training Triples' query above in order to proceed!
+            """), kind="danger"))
+
+        return
         _model = 'RotatE'
         _save_path = f"trained_models/{_model}"
 
@@ -1696,6 +1704,7 @@ def _(present):
 def _(
     button_train_model_complex,
     learning,
+    mo,
     present,
     testing,
     training,
@@ -1703,6 +1712,12 @@ def _(
     validation,
 ):
     def _train_model_complex():
+        if not training:
+            return mo.output.append(mo.callout(mo.md("""
+            **⚠️ Missing training data ⚠️**  
+            Training data has not been defined yet. Please execute the 'Query Training Triples' query above in order to proceed!
+            """), kind="danger"))
+    
         _model = 'ComplEx'
         _save_path = f"trained_models/{_model}"
 
