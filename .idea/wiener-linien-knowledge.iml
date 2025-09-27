@@ -9,8 +9,8 @@
       <excludeFolder url="file://$MODULE_DIR$/initializer/target" />
       <excludeFolder url="file://$MODULE_DIR$/notebook/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/notebook/trained_models" />
-      <excludeFolder url="file://$MODULE_DIR$/notebook/trained_models/ComplEx" />
-      <excludeFolder url="file://$MODULE_DIR$/notebook/trained_models/RotatE" />
+      <excludeFolder url="file://$MODULE_DIR$/notebook/trained_models/ComplEx (pretrained)" />
+      <excludeFolder url="file://$MODULE_DIR$/notebook/trained_models/RotatE (pretrained)" />
     </content>
     <orderEntry type="jdk" jdkName="uv (wiener-linien-knowledge) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />

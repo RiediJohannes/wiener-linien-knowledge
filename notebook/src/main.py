@@ -1595,7 +1595,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(training_configs):
+def _(mo, training_configs):
     import pandas as pd
 
     def flatten_config(data, parent_key=''):
@@ -1624,8 +1624,14 @@ def _(training_configs):
     df.index.name = 'Parameter'
     df = df.fillna('default') # Replace NaN values with empty string
 
-    df
+    mo.ui.table(df, pagination=None, selection=None)
     return
+
+
+@app.cell
+def _(learning, mo):
+    get_trained_models, set_trained_models = mo.state(learning.available_models())
+    return get_trained_models, set_trained_models
 
 
 @app.cell(hide_code=True)
@@ -1643,40 +1649,42 @@ def _(mo):
 
 
 @app.cell
-def _(present):
-    button_train_model_rotate = present.create_run_button(label="Train Model RotatE", kind="danger")
-    return (button_train_model_rotate,)
-
-
-@app.cell
 def _(
-    button_train_model_rotate,
     learning,
     mo,
-    present,
+    set_trained_models,
     testing,
     training,
     training_configs,
     validation,
 ):
-    def _train_model_rotate():
+    def train_model(model: str):
         if not training:
             return mo.output.append(mo.callout(mo.md("""
             **⚠️ Missing training data ⚠️**  
             Training data has not been defined yet. Please execute the 'Query Training Triples' query above in order to proceed!
             """), kind="danger"))
 
-        return
-        _model = 'RotatE'
         _save_path = f"trained_models/{_model}"
-
-        rotate_results = learning.train_model(training, validation, testing, training_configs[_model])
-        learning.save_training_results(rotate_results, _save_path, validation_triples=validation, testing_triples=testing)
+        training_results = learning.train_model(training, validation, testing, training_configs[_model])
+        learning.save_training_results(training_results, _save_path, validation_triples=validation, testing_triples=testing)
 
         # Display some immediate results to assess the quality of the trained model
-        learning.summarize_training_metrics(rotate_results.metric_results)
+        learning.summarize_training_metrics(training_results.metric_results)
 
-    present.run_code(button_train_model_rotate.value, _train_model_rotate)
+        set_trained_models(learning.available_models()) # Trigger an update of the available models downstream
+    return (train_model,)
+
+
+@app.cell
+def _(present):
+    button_train_model_rotate = present.create_run_button(label="Train Model RotatE", kind="danger")
+    return (button_train_model_rotate,)
+
+
+@app.cell
+def _(button_train_model_rotate, present, train_model):
+    present.run_code(button_train_model_rotate.value, train_model, model='RotatE')
     return
 
 
@@ -1701,33 +1709,32 @@ def _(present):
 
 
 @app.cell
-def _(
-    button_train_model_complex,
-    learning,
-    mo,
-    present,
-    testing,
-    training,
-    training_configs,
-    validation,
-):
-    def _train_model_complex():
-        if not training:
-            return mo.output.append(mo.callout(mo.md("""
-            **⚠️ Missing training data ⚠️**  
-            Training data has not been defined yet. Please execute the 'Query Training Triples' query above in order to proceed!
-            """), kind="danger"))
+def _(button_train_model_complex, present, train_model):
+    present.run_code(button_train_model_complex.value, train_model, model='ComplEx')
+    return
 
-        _model = 'ComplEx'
-        _save_path = f"trained_models/{_model}"
 
-        complex_results = learning.train_model(training, validation, testing, training_configs[_model])
-        learning.save_training_results(complex_results, _save_path, validation_triples=validation, testing_triples=testing)
+@app.cell
+def _(get_trained_models, mo):
+    _trained_models = get_trained_models()
 
-        # Display some immediate results to assess the quality of the trained model
-        learning.summarize_training_metrics(complex_results.metric_results)
+    if _trained_models:
+        _models_list = mo.ui.table(_trained_models, selection=None)
 
-    present.run_code(button_train_model_complex.value, _train_model_complex)
+        mo.output.append(mo.md(fr"""
+        ## Trained Models
+        Currently, the following trained models are available for reasoning tasks:  
+
+        {_models_list}
+        """
+        ))
+    else:
+        mo.output.append(mo.callout(
+            mo.md("""⚠️ **Warning: No models available!**⚠️  
+            Currently, no trained KG embedding models could be found on disk. Be sure to train some models before proceeding or check
+            for the presence of pretrained models in `notebook/trained_models/`."""),
+            kind='warn')
+        )
     return
 
 
@@ -1745,24 +1752,18 @@ def _(mo):
 
 @app.cell
 def _(learning):
-    learning.available_models()
-    return
-
-
-@app.cell
-def _(learning):
-    _loaded_model, _loaded_triples = learning.load_model("rotate")
+    _loaded_model, _loaded_triples = learning.load_model("rotate (pretrained)")
     _loaded_model
     return
 
 
 @app.cell
-def _(mo):
+def _(learning, mo):
+    _trained_models = learning.available_models()
     kge_model_selection = mo.ui.dropdown(
         label="Select model: ",
-        options={
-            'RotatE': 'Du'
-        },
+        options=_trained_models,
+        value=_trained_models[0] if _trained_models else None
     )
     kge_model_selection
     return

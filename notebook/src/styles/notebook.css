@@ -5,6 +5,7 @@
   --marimo-heading-font: 'Raleway', sans-serif;
   --marimo-monospace-font: 'Jetbrains Mono', 'Cascadia Code', monospace;
   --marimo-text-font: 'Atkinson Hyperlegible', 'PT Sans', sans-serif;
+  --text-sm: 1rem; /* Size of small text in UI elements like dropdowns or tables */
 
   --destructive: hsl(0deg 100% 65%);
   --destructive-foreground: light-dark(#eceff4, #2e3440);

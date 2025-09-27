@@ -83,11 +83,12 @@ They were particularly fond of:
   - 13:00-15:00
 - 25.9.
   - 17:30-19:30
-- 26.9.
+- 27.9.
+  - 14:00-
 
 ### Report
 
-25h
+27h
 
 ## Submission
 
