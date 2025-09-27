@@ -1717,7 +1717,7 @@ def _(
             **⚠️ Missing training data ⚠️**  
             Training data has not been defined yet. Please execute the 'Query Training Triples' query above in order to proceed!
             """), kind="danger"))
-    
+
         _model = 'ComplEx'
         _save_path = f"trained_models/{_model}"
 
@@ -1740,6 +1740,31 @@ def _(mo):
     With our KG embedding models trained, we can now utilize them to generate predictions about missing links in the public transport network. This is done by prompting the trained model with incomplete triples, i.e., triples $(h, r, t)$ where exactly one of the three components is left blank. The model will then fill this gap with various entities and assess their likelyhood. We take the guessed triples with the highest probability to retrieve the most reasonable predictions, according to the model.
     """
     )
+    return
+
+
+@app.cell
+def _(learning):
+    learning.available_models()
+    return
+
+
+@app.cell
+def _(learning):
+    _loaded_model, _loaded_triples = learning.load_model("rotate")
+    _loaded_model
+    return
+
+
+@app.cell
+def _(mo):
+    kge_model_selection = mo.ui.dropdown(
+        label="Select model: ",
+        options={
+            'RotatE': 'Du'
+        },
+    )
+    kge_model_selection
     return
 
 

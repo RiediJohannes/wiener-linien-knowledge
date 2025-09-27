@@ -1,12 +1,15 @@
 import numpy as np
 import pandas as pd
 import torch
+import os
 from pykeen.evaluation import MetricResults, RankBasedEvaluator
 from pykeen.evaluation.rank_based_evaluator import RankBasedMetricKey
 from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult
 from pykeen.triples import TriplesFactory, leakage
 
+
+MODELS_SOURCE = os.path.join("notebook", "trained_models")
 
 def generate_training_set(fact_triples: list[tuple[str, str, str]]) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
     triples_array = np.array(fact_triples)
@@ -58,33 +61,52 @@ def save_training_results(results: PipelineResult, model_dir_path: str,
 
     # Export validation and testing triples, if there were any
     if validation_triples:
-        validation_triples.to_path_binary(f"{model_dir_path}/validation_triples")
+        validation_triples.to_path_binary(os.path.join(model_dir_path, "validation_triples"))
     if testing_triples:
-        testing_triples.to_path_binary(f"{model_dir_path}/testing_triples")
+        testing_triples.to_path_binary(os.path.join(model_dir_path, "testing_triples"))
 
     # Export training metrics to a CSV file
     results_dataframe = results.metric_results.to_df()
-    results_dataframe.to_csv(f'{model_dir_path}/metrics.csv', index=False)
+    results_dataframe.to_csv(os.path.join(model_dir_path, 'metrics.csv'), index=False)
 
 
-def load_model(model_dir_path: str) -> tuple[Model, TriplesFactory]:
+def available_models() -> list[str]:
+    return os.listdir(MODELS_SOURCE)
+
+def load_model(model_name: str) -> tuple[Model, TriplesFactory]:
+    model_dir = _get_model_path(model_name)
+    return load_model_from_path(model_dir)
+
+def load_training_results(model_name: str) -> pd.DataFrame:
+    model_dir = _get_model_path(model_name)
+    return load_training_results_from_path(model_dir)
+
+def load_triples(model_name: str) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
+    model_dir = _get_model_path(model_name)
+    return load_triples_from_path(model_dir)
+
+
+def load_model_from_path(model_dir_path: str) -> tuple[Model, TriplesFactory]:
+    source_dir = _get_model_source_dir(model_dir_path)
     model = torch.load(
-        model_dir_path + "/trained_model.pkl",
+        os.path.join(source_dir, "trained_model.pkl"),
         map_location=torch.device('cuda' if torch.cuda.is_available() else 'cpu'),
         weights_only=False
     )
 
     # Training triples factory (for ID→label mapping)
-    training_triples = TriplesFactory.from_path_binary(path=f"{model_dir_path}/training_triples")
+    training_triples = TriplesFactory.from_path_binary(path=os.path.join(source_dir, "training_triples"))
     return model, training_triples
 
-def load_training_results(model_dir_path: str) -> pd.DataFrame:
-    return pd.read_csv(f"{model_dir_path}/metrics.csv")
+def load_training_results_from_path(model_dir_path: str) -> pd.DataFrame:
+    csv_path = os.path.join(_get_model_source_dir(model_dir_path), 'metrics.csv')
+    return pd.read_csv(csv_path)
 
-def load_triples(model_dir_path: str) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
-    training = TriplesFactory.from_path_binary(path=f"{model_dir_path}/training_triples")
-    validation = TriplesFactory.from_path_binary(path=f"{model_dir_path}/validation_triples")
-    testing = TriplesFactory.from_path_binary(path=f"{model_dir_path}/testing_triples")
+def load_triples_from_path(model_dir_path: str) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
+    triples_source = _get_model_source_dir(model_dir_path)
+    training = TriplesFactory.from_path_binary(path=os.path.join(triples_source, "training_triples"))
+    validation = TriplesFactory.from_path_binary(path=os.path.join(triples_source, "validation_triples"))
+    testing = TriplesFactory.from_path_binary(path=os.path.join(triples_source, "testing_triples"))
     return training, validation, testing
 
 
@@ -112,3 +134,16 @@ def evaluate_model(model: Model, testing_triples: TriplesFactory, other_known_tr
         mapped_triples=testing_triples.mapped_triples,
         additional_filter_triples=other_triples
     )
+
+def _get_model_path(model_name: str) -> str:
+    models_dict = {d.name.lower(): d.path for d in os.scandir(MODELS_SOURCE) if d.is_dir()}
+
+    if model_name.lower() not in models_dict.keys():
+        raise ValueError(f"Model with name '{model_name}' could not be found.")
+
+    return models_dict[model_name.lower()]
+
+def _get_model_source_dir(model_dir_path: str) -> str:
+    return model_dir_path\
+        if os.path.splitroot(model_dir_path)[2].startswith("notebook")\
+        else os.path.join("notebook", model_dir_path)
