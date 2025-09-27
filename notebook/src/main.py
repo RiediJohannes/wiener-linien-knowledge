@@ -1755,7 +1755,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(get_trained_models, mo):
     _trained_models = get_trained_models()
     model_names = _trained_models['name'].tolist()
@@ -1763,9 +1763,25 @@ def _(get_trained_models, mo):
     kge_model_selection = mo.ui.dropdown(
         label="Select model: ",
         options=model_names,
-        value=model_names[0] if model_names else None
+        value=None
     )
-    kge_model_selection
+    return (kge_model_selection,)
+
+
+@app.cell
+def _(kge_model_selection, learning, mo, print_raw):
+    _prompt = mo.md("To generate predictions, please **select** one of the trained **KGE models**.")
+    mo.output.append(mo.vstack([
+        _prompt,
+        kge_model_selection
+    ]))
+
+    if kge_model_selection.value:
+        predictor = learning.load_model(kge_model_selection.value)
+        if predictor:
+            print_raw(f"✅ Model '{kge_model_selection.value}' is ready to use!")
+        else:
+            print_raw("❌ Failed to load KGE model")
     return
 
 
