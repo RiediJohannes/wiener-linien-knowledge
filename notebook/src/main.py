@@ -1630,7 +1630,7 @@ def _(mo, training_configs):
 
 @app.cell
 def _(learning, mo):
-    get_trained_models, set_trained_models = mo.state(learning.available_models())
+    get_trained_models, set_trained_models = mo.state(learning.get_models_summary())
     return get_trained_models, set_trained_models
 
 
@@ -1665,14 +1665,15 @@ def _(
             Training data has not been defined yet. Please execute the 'Query Training Triples' query above in order to proceed!
             """), kind="danger"))
 
-        _save_path = f"trained_models/{_model}"
-        training_results = learning.train_model(training, validation, testing, training_configs[_model])
-        learning.save_training_results(training_results, _save_path, validation_triples=validation, testing_triples=testing)
+        # Save training metrics and training configuration to disk
+        training_results = learning.train_model(training, validation, testing, training_configs[model])
+        learning.save_training_results(model, training_results, validation_triples=validation, testing_triples=testing)
+        learning.save_training_config(model, training_configs[model])
+
+        set_trained_models(learning.get_models_summary()) # Trigger an update of the available models downstream
 
         # Display some immediate results to assess the quality of the trained model
-        learning.summarize_training_metrics(training_results.metric_results)
-
-        set_trained_models(learning.available_models()) # Trigger an update of the available models downstream
+        return learning.summarize_training_metrics(training_results.metric_results)
     return (train_model,)
 
 
@@ -1683,8 +1684,10 @@ def _(present):
 
 
 @app.cell
-def _(button_train_model_rotate, present, train_model):
-    present.run_code(button_train_model_rotate.value, train_model, model='RotatE')
+def _(button_train_model_rotate, mo, present, train_model):
+    _training_summary = present.run_code(button_train_model_rotate.value, train_model, model='RotatE')
+    if _training_summary is not None and not _training_summary.empty:
+        mo.output.append(_training_summary)
     return
 
 
@@ -1709,8 +1712,10 @@ def _(present):
 
 
 @app.cell
-def _(button_train_model_complex, present, train_model):
-    present.run_code(button_train_model_complex.value, train_model, model='ComplEx')
+def _(button_train_model_complex, mo, present, train_model):
+    _training_summary = present.run_code(button_train_model_complex.value, train_model, model='ComplEx')
+    if _training_summary:
+        mo.output.append(_training_summary)
     return
 
 
@@ -1718,7 +1723,7 @@ def _(button_train_model_complex, present, train_model):
 def _(get_trained_models, mo):
     _trained_models = get_trained_models()
 
-    if _trained_models:
+    if _trained_models is not None and not _trained_models.empty:
         _models_list = mo.ui.table(_trained_models, selection=None)
 
         mo.output.append(mo.md(fr"""
@@ -1744,26 +1749,21 @@ def _(mo):
         r"""
     ## Link Prediction
 
-    With our KG embedding models trained, we can now utilize them to generate predictions about missing links in the public transport network. This is done by prompting the trained model with incomplete triples, i.e., triples $(h, r, t)$ where exactly one of the three components is left blank. The model will then fill this gap with various entities and assess their likelyhood. We take the guessed triples with the highest probability to retrieve the most reasonable predictions, according to the model.
+    With our KG embedding models trained, we can now utilize them to generate predictions about missing links in the public transport network. This is done by **prompting the trained model with incomplete triples**, i.e., triples $(h, r, t)$ where exactly one of the three components is left blank. The model will then fill this gap with various entities and assess their likelyhood. We take the guessed triples with the highest probability to retrieve the most reasonable predictions, according to the model.
     """
     )
     return
 
 
 @app.cell
-def _(learning):
-    _loaded_model, _loaded_triples = learning.load_model("rotate (pretrained)")
-    _loaded_model
-    return
+def _(get_trained_models, mo):
+    _trained_models = get_trained_models()
+    model_names = _trained_models['name'].tolist()
 
-
-@app.cell
-def _(learning, mo):
-    _trained_models = learning.available_models()
     kge_model_selection = mo.ui.dropdown(
         label="Select model: ",
-        options=_trained_models,
-        value=_trained_models[0] if _trained_models else None
+        options=model_names,
+        value=model_names[0] if model_names else None
     )
     kge_model_selection
     return
