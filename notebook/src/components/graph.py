@@ -2,8 +2,8 @@ import os
 
 import neo4j.graph
 from neo4j import GraphDatabase, ResultSummary, Record
-from src.components.types import SubDistrict, Stop, Connection, ClusterStop, ModeOfTransport, Frequency
 
+from src.components.types import SubDistrict, Stop, Connection, ClusterStop, parse_mode_of_transport, parse_frequency
 
 URI = "bolt://" + os.getenv('NEO4J_URI', "localhost:7687")
 AUTH = ("neo4j", "")
@@ -114,8 +114,8 @@ def get_connections(connection_query: str):
     for record in query_result:
         from_stop = _parse_stop(record["from"], [])
         to_stop = _parse_stop(record["to"], [])
-        mode_of_transport = _parse_mode_of_transport(record["label"])
-        frequency = _parse_frequency(record["label"])
+        mode_of_transport = parse_mode_of_transport(record["label"])
+        frequency = parse_frequency(record["label"])
 
         connections.append(Connection(from_stop, to_stop, mode_of_transport, frequency))
 
@@ -329,16 +329,3 @@ def _parse_stop(node: neo4j.graph.Node, cluster_points) -> Stop:
                            float(node["cluster_lat"]), float(node["cluster_lon"]), cluster_points)
     else:
         return Stop(node["id"], float(node["lat"]), float(node["lon"]), node["name"])
-
-def _parse_mode_of_transport(connection_label: str) -> ModeOfTransport:
-    match connection_label:
-        case "BUS_CONNECTS_TO": return ModeOfTransport.BUS
-        case "TRAM_CONNECTS_TO": return ModeOfTransport.TRAM
-        case "SUBWAY_CONNECTS_TO": return ModeOfTransport.SUBWAY
-        case _: return ModeOfTransport.ANY
-
-def _parse_frequency(frequency_label: str) -> Frequency:
-    if frequency_label in [member.name for member in Frequency]:
-        return Frequency[frequency_label]
-    else:
-        return Frequency.UNKNOWN

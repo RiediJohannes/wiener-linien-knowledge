@@ -6,6 +6,8 @@ from pykeen.models import Model
 from pykeen.predict import predict_triples, predict_target, Predictions
 from pykeen.triples import TriplesFactory
 
+from src.components.types import Stop, ModeOfTransport, Frequency, parse_mode_of_transport, parse_frequency, Connection
+
 
 class PredictionMachine:
     def __init__(self, embedding_model: Model, training_triples: TriplesFactory, *other_known_triples: TriplesFactory):
@@ -83,3 +85,15 @@ class PredictionMachine:
         """
         filter_triples = [self.training_triples.mapped_triples] + self.other_known_triples
         return triple_predictions.filter_triples(*filter_triples).df
+
+def create_connections(connection_triples: list[tuple[str,str,str]], stops_by_id: dict[str, Stop]) -> list[Connection]:
+    connections = []
+    for head, rel, tail in connection_triples:
+        from_stop: Stop = stops_by_id[head]
+        to_stop: Stop = stops_by_id[tail]
+        mode_of_transport: ModeOfTransport = parse_mode_of_transport(rel)
+        frequency: Frequency = parse_frequency(rel)
+
+        connections.append(Connection(from_stop, to_stop, mode_of_transport, frequency))
+
+    return connections

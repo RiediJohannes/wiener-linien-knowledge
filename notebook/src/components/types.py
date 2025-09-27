@@ -58,3 +58,17 @@ class Connection:
         self.to_stop: Stop = to_stop
         self.mode_of_transport: ModeOfTransport = mode_of_transport
         self.frequency: Frequency = frequency
+
+
+def parse_mode_of_transport(connection_label: str) -> ModeOfTransport:
+    match connection_label:
+        case "BUS_CONNECTS_TO": return ModeOfTransport.BUS
+        case "TRAM_CONNECTS_TO": return ModeOfTransport.TRAM
+        case "SUBWAY_CONNECTS_TO": return ModeOfTransport.SUBWAY
+        case _: return ModeOfTransport.ANY
+
+def parse_frequency(frequency_label: str) -> Frequency:
+    if frequency_label in [member.name for member in Frequency]:
+        return Frequency[frequency_label]
+    else:
+        return Frequency.UNKNOWN

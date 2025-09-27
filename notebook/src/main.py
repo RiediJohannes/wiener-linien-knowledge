@@ -7,6 +7,8 @@ app = marimo.App(width="medium", app_title="", css_file="styles/notebook.css")
 @app.cell(hide_code=True)
 def imports():
     import marimo as mo
+    import pandas as pd
+    import numpy as np
 
     import src.components.graph as graph
     import src.components.geo_spatial as geo
@@ -16,7 +18,7 @@ def imports():
 
     def print_raw(message: str):
         mo.output.append(mo.plain_text(message))
-    return geo, graph, learning, mo, prediction, present, print_raw
+    return geo, graph, learning, mo, np, pd, prediction, present, print_raw
 
 
 @app.cell(hide_code=True)
@@ -1530,7 +1532,7 @@ def _(mo):
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _():
     # Prepare model training configurations
     training_configs = {
@@ -1595,9 +1597,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(mo, training_configs):
-    import pandas as pd
-
+def _(mo, pd, training_configs):
     def flatten_config(data, parent_key=''):
         items = {}
         for key, val in data.items():
@@ -1777,30 +1777,100 @@ def _(kge_model_selection, learning, mo, print_raw):
     ]))
 
     if kge_model_selection.value:
-        predictor = learning.load_model(kge_model_selection.value)
-        if predictor:
+        predictor, predictor_triples = learning.load_model(kge_model_selection.value)
+        if predictor and predictor_triples:
             print_raw(f"✅ Model '{kge_model_selection.value}' is ready to use!")
         else:
             print_raw("❌ Failed to load KGE model")
-    return
+    return predictor, predictor_triples
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"""Scoring potential bus and tram connections of nearby stops.""")
+    mo.md(
+        r"""
+    ### Predicting Bus/Tram Connections
+
+    First, we would like the model to predict the most likely new bus and tram connections. We _could_ do this by feeding the model **incomplete triples** of the form `(source_stop, BUS_CONNECTS_TO, ??)` and let it come up with suitable predictions for the missing tail of the triple.  
+    However, since we are exclusively talking about _direct connections between existing stops_, it only makes sense to consider stops in the vicinity of each other. Therefore, we significantly improve performance by **selectively generating complete triples** and only let the model **score these suggested triples** in one pass.
+    """
+    )
     return
 
 
 @app.cell
-def _(graph, learning, prediction, testing, validation):
-    if False:
-        _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
-        _stops_with_neighbours = graph.get_nearby_stops()
+def _(kge_model_selection, np, predictor, predictor_triples):
+    ready_to_predict: bool = kge_model_selection.value and predictor and predictor_triples
 
-        _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
-        #_pred.score_potential_connections(_stops_with_neighbours)
+    def extract_top_triples(dataframe, n: int = 20):
+        top_rows = dataframe.nlargest(n, 'score')
+        connection_triples = top_rows[['head_label', 'relation_label', 'tail_label']].values.tolist()
+        stops_set = set(np.unique(np.concatenate(
+            [top_rows['head_label'].values,
+             top_rows['tail_label'].values]))
+        )
 
-        _pred.predict_connection_frequency(_stops_with_neighbours)
+        return connection_triples, stops_set
+    return extract_top_triples, ready_to_predict
+
+
+@app.cell
+def _(mo, ready_to_predict: bool):
+    button_predict_bus_tram = mo.ui.run_button(label="Predict Bus Connections", disabled=(not ready_to_predict))
+    button_predict_bus_tram
+    return (button_predict_bus_tram,)
+
+
+@app.cell
+def _(graph, mo, prediction, present):
+    def display_connection_predictions(connection_triples, connected_stops, spinner):
+        spinner.update("Requesting stop data from database...")
+        _stops_dict = {stop.id: stop for stop in graph.get_stops(id_list=list(connected_stops))}
+
+        spinner.update("Drawing predicted connections...")
+        mo.output.append(connection_triples)
+        connections = prediction.create_connections(connection_triples, _stops_dict)
+
+        _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
+                                             visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
+        _transport_map.add_transit_nodes(_stops_dict.values())
+        _transport_map.add_transit_connections(connections)
+
+        _legend_entries = [(present.snake_to_title_case(conn.name), colour)
+                          for conn, colour in list(present.TransportMap.connection_colours.items())[:-1]]
+        _transport_map.add_legend("Mode of Transport", _legend_entries)
+
+        _map_output = mo.vstack([mo.iframe(_transport_map.as_html(), height=650)])
+        mo.output.replace_at_index(_map_output, 0)
+    return (display_connection_predictions,)
+
+
+@app.cell
+def _(
+    button_predict_bus_tram,
+    display_connection_predictions,
+    extract_top_triples,
+    graph,
+    mo,
+    prediction,
+    predictor,
+    predictor_triples,
+    testing,
+    validation,
+):
+    if button_predict_bus_tram.value:
+        with mo.status.spinner("Loading model...") as _spinner:
+            _spinner.update("Collecting stop neighbourhoods...")
+            _stops_with_neighbours = graph.get_nearby_stops()
+
+            _spinner.update("Scoring connections triples...")
+            _pred = prediction.PredictionMachine(predictor, predictor_triples, validation, testing)
+            _bus_tram_connection_scores = _pred.score_potential_connections(_stops_with_neighbours)
+
+            _spinner.update("Extracting top connections...")
+            _top_connections, _connected_stop_ids = extract_top_triples(_bus_tram_connection_scores, n=40)
+
+            output = display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
     return
 
 

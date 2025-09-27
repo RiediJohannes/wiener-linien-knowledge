@@ -84,7 +84,8 @@ They were particularly fond of:
 - 25.9.
   - 17:30-19:30
 - 27.9.
-  - 14:00-
+  - 14:00-19:30
+  - 22:30
 
 ### Report
 
