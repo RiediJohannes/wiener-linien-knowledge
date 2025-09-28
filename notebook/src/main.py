@@ -606,9 +606,9 @@ def _(graph, mo):
     def get_subdistricts_per_district():
         subdistrict_query = """
         MATCH (s:SubDistrict)
-        WITH s.district_num as dist, s.sub_district_num as subdist
-        ORDER BY dist, subdist
-        RETURN dist as district, collect(subdist) as subdistricts
+        ORDER BY s.district_num, s.sub_district_num
+        WITH s.district_num as district, collect(s.sub_district_num) as subdistricts, collect(s.name) as names
+        RETURN district, subdistricts, names
         """
 
         result = graph.execute_query(subdistrict_query)
@@ -617,7 +617,8 @@ def _(graph, mo):
         district_mapping = {}
         for record in result:
             district = record['district']
-            subdistricts = sorted(record['subdistricts'])
+            subs_dict = {f"{id} - {name}": id for id, name in zip(record['subdistricts'], record['names'])}
+            subdistricts = subs_dict
             district_mapping[district] = subdistricts
 
         return district_mapping
@@ -763,7 +764,7 @@ def _(mo, present, stops_map_get_data, stops_map_search_button):
             _transport_map.add_stops(_stops)
             _transport_map.add_subdistricts(_subdistricts, visible=(len(_subdistricts)>0))
             _heading = mo.md(f"**{_description}**")
-        
+
             # Display the results
             _iframe = mo.iframe(_transport_map.as_html(), height=650)
             _stack = [_heading, _iframe]
@@ -1984,7 +1985,7 @@ def _(
                     head=station, rel="SUBWAY_CONNECTS_TO",
                     targets=_target_stops - {station}
                 ).nlargest(n=10, columns="score")
-            
+
                 _single_prediction['head_label'] = station
                 _single_prediction['relation_label'] = "SUBWAY_CONNECTS_TO"
                 _connection_predictions.append(_single_prediction)

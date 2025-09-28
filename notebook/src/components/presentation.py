@@ -180,7 +180,7 @@ class TransportMap:
                 color='green',
                 weight=1,
                 fill=True,
-                fill_opacity=0.1,
+                fill_opacity=0.15,
                 opacity=0.3,
                 tooltip=district.name,
                 pane="districts",
