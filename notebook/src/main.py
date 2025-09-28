@@ -779,26 +779,6 @@ def _(mo, present, stops_map_get_data, stops_map_search_button):
 
 
 @app.cell(hide_code=True)
-def _(graph, mo, present):
-    if False:
-        _stops = graph.get_stops(with_clusters=True, id_list=["at:49:1000:0:1"], name_list=['Marx'])
-        #_stops = graph.get_stops(id_list=["at:49:1000:0:1", "at:49:1081:0:1"])
-        #_stops = graph.get_stop_cluster('Valiergasse')
-        #_stops = graph.get_stops_for_subdistrict(11, 2)
-
-        # tiles='https://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}{r}.png?apikey=2006ee957e924a28a24e5be254c48329',
-        # attr='&copy; <a href="http://www.thunderforest.com/">Thunderforest</a>, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-        _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=11)
-        _transport_map.add_stops(_stops)
-
-        # Visible output
-        _heading = mo.md("### **Explore stop locations and clusters**")
-        _iframe = mo.iframe(_transport_map.as_html(), height=650)
-        mo.vstack([_heading, _iframe])
-    return
-
-
-@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""
@@ -1564,7 +1544,7 @@ def _():
             'stopper': 'early',
             'stopper_kwargs':dict(
                 patience=30,  # Stop if loss value doesn't improve for 30 iterations
-                frequency=15 # Check every 10 epochs
+                frequency=15  # Check every 15 epochs
             )
         },
 
@@ -1932,14 +1912,14 @@ def _(
             MATCH (s:SubwayStation)
             RETURN s.id as id
             """
-            _subway_stations = [record["id"] for record in graph.execute_query(_subway_stations_query)]
+            _subway_stations = {record["id"] for record in graph.execute_query(_subway_stations_query)}
 
             _spinner.update("Collecting all possible target stops...")
             _all_stops_query = f"""
             MATCH (s:InUse)
             RETURN s.id as id
             """
-            _target_stops = [record["id"] for record in graph.execute_query(_all_stops_query)]
+            _target_stops = {record["id"] for record in graph.execute_query(_all_stops_query)}
 
             _spinner.update("Predicting subway connections...")
             _pred = prediction.PredictionMachine(predictor, predictor_triples, *predictor_testing_triples)
@@ -1947,7 +1927,7 @@ def _(
             _connection_predictions = []
             #for station in _subway_stations:
             for station in _subway_stations:
-                _single_prediction = _pred.predict_component(head=station, rel="SUBWAY_CONNECTS_TO", targets=_target_stops).nlargest(n=10, columns="score")
+                _single_prediction = _pred.predict_component(head=station, rel="SUBWAY_CONNECTS_TO", targets=_target_stops - {station}).nlargest(n=10, columns="score")
                 _single_prediction['head_label'] = station
                 _single_prediction['relation_label'] = "SUBWAY_CONNECTS_TO"
                 _connection_predictions.append(_single_prediction)

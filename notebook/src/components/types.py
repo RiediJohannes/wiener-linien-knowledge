@@ -37,13 +37,23 @@ class SubDistrict:
         self.area: float = area
         self.shape: str = shape
 
-class ModeOfTransport(Enum):
+
+class ComparableEnum(Enum):
+    def __eq__(self, other):
+        if hasattr(other, "name") and hasattr(other, "value"):
+            return self.name == other.name and self.value == other.value
+        return False
+
+    def __hash__(self):
+        return 3 * hash(self.name) + 7 * hash(self.value)
+
+class ModeOfTransport(ComparableEnum):
     BUS = 1
     TRAM = 2
     SUBWAY = 3
     ANY = 0
 
-class Frequency(Enum):
+class Frequency(ComparableEnum):
     NONSTOP_TO = 1
     VERY_FREQUENTLY_TO = 2
     FREQUENTLY_TO = 3
@@ -51,13 +61,6 @@ class Frequency(Enum):
     OCCASIONALLY_TO = 5
     RARELY_TO = 6
     UNKNOWN = 0
-
-class Connection:
-    def __init__(self, from_stop: Stop, to_stop: Stop, mode_of_transport: ModeOfTransport = ModeOfTransport.ANY, frequency: Frequency = Frequency.UNKNOWN):
-        self.from_stop: Stop = from_stop
-        self.to_stop: Stop = to_stop
-        self.mode_of_transport: ModeOfTransport = mode_of_transport
-        self.frequency: Frequency = frequency
 
 
 def parse_mode_of_transport(connection_label: str) -> ModeOfTransport:
@@ -72,3 +75,19 @@ def parse_frequency(frequency_label: str) -> Frequency:
         return Frequency[frequency_label]
     else:
         return Frequency.UNKNOWN
+
+
+class Connection:
+    def __init__(self, from_stop: Stop, to_stop: Stop, mode_of_transport: ModeOfTransport = ModeOfTransport.ANY, frequency: Frequency = Frequency.UNKNOWN):
+        self.from_stop: Stop = from_stop
+        self.to_stop: Stop = to_stop
+        self.mode_of_transport: ModeOfTransport = mode_of_transport
+        self.frequency: Frequency = frequency
+
+    def __str__(self):
+        if self.mode_of_transport != ModeOfTransport.ANY:
+            return f"{self.from_stop.name} --[{self.mode_of_transport}]--> {self.to_stop.name}"
+        elif self.frequency != Frequency.UNKNOWN:
+            return f"{self.from_stop.name} --[{self.frequency}]--> {self.to_stop.name}"
+        else:
+            return f"{self.from_stop.name} --[UNKNOWN_RELATION]--> {self.to_stop.name}"
