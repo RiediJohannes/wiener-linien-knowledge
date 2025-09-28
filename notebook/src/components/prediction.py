@@ -15,7 +15,7 @@ class PredictionMachine:
         self.training_triples: TriplesFactory = training_triples
         self.other_known_triples: list[Tensor] = [factory.mapped_triples for factory in other_known_triples]
 
-    def score_potential_connections(self, stops_with_targets: list[tuple[str, list[str]]], *, connection_types: list[str] = None, order_ascending = True) -> pd.DataFrame:
+    def score_potential_connections(self, stops_with_targets: list[tuple[str, list[str]]], *, connection_types: list[str] = None, order_ascending = False) -> pd.DataFrame:
         relations = connection_types if connection_types else ["BUS_CONNECTS_TO", "TRAM_CONNECTS_TO"]
         triples = [
             (start, relation, target)
@@ -26,7 +26,7 @@ class PredictionMachine:
 
         return self.score_triples(triples, order_ascending=order_ascending)
 
-    def predict_connection_frequency(self, stops_with_targets: list[tuple[str, list[str]]], order_ascending = True):
+    def predict_connection_frequency(self, stops_with_targets: list[tuple[str, list[str]]], order_ascending = False):
         frequency_relations = ["NONSTOP_TO", "VERY_FREQUENTLY_TO", "FREQUENTLY_TO", "REGULARLY_TO", "OCCASIONALLY_TO", "RARELY_TO"]
         triples = [
             (start, relation, target)
@@ -48,7 +48,7 @@ class PredictionMachine:
         return filtered_df
 
 
-    def score_triples(self, triples: Sequence[tuple[str, str, str]], order_ascending = True, apply_filter = True) -> pd.DataFrame:
+    def score_triples(self, triples: Sequence[tuple[str, str, str]], order_ascending = False, apply_filter = True) -> pd.DataFrame:
         score_pack = predict_triples(
             model=self.model,
             triples_factory=self.training_triples,

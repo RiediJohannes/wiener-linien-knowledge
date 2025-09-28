@@ -1799,7 +1799,16 @@ def _(mo):
 
 
 @app.cell
-def _(kge_model_selection, np, predictor, predictor_triples):
+def _(
+    graph,
+    kge_model_selection,
+    mo,
+    np,
+    prediction,
+    predictor,
+    predictor_triples,
+    present,
+):
     ready_to_predict: bool = kge_model_selection.value and predictor and predictor_triples
 
     def extract_top_triples(dataframe, n: int = 20):
@@ -1811,24 +1820,12 @@ def _(kge_model_selection, np, predictor, predictor_triples):
         )
 
         return connection_triples, stops_set
-    return extract_top_triples, ready_to_predict
 
-
-@app.cell
-def _(mo, ready_to_predict: bool):
-    button_predict_bus_tram = mo.ui.run_button(label="Predict Bus Connections", disabled=(not ready_to_predict))
-    button_predict_bus_tram
-    return (button_predict_bus_tram,)
-
-
-@app.cell
-def _(graph, mo, prediction, present):
     def display_connection_predictions(connection_triples, connected_stops, spinner):
         spinner.update("Requesting stop data from database...")
         _stops_dict = {stop.id: stop for stop in graph.get_stops(id_list=list(connected_stops))}
 
         spinner.update("Drawing predicted connections...")
-        mo.output.append(connection_triples)
         connections = prediction.create_connections(connection_triples, _stops_dict)
 
         _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
@@ -1842,7 +1839,18 @@ def _(graph, mo, prediction, present):
 
         _map_output = mo.vstack([mo.iframe(_transport_map.as_html(), height=650)])
         mo.output.replace_at_index(_map_output, 0)
-    return (display_connection_predictions,)
+    return (
+        display_connection_predictions,
+        extract_top_triples,
+        ready_to_predict,
+    )
+
+
+@app.cell
+def _(mo, ready_to_predict: bool):
+    button_predict_bus_tram = mo.ui.run_button(label="Predict Bus Connections", disabled=(not ready_to_predict))
+    button_predict_bus_tram
+    return (button_predict_bus_tram,)
 
 
 @app.cell
@@ -1870,24 +1878,74 @@ def _(
             _spinner.update("Extracting top connections...")
             _top_connections, _connected_stop_ids = extract_top_triples(_bus_tram_connection_scores, n=40)
 
-            output = display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
+            display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""Scoring potential subway connections between""")
+    mo.md(
+        r"""
+    ### Predicting Subway Connections
+
+    For subway connections, only allowing the reasoner to connect stops that are very close to each other does not make a lot of sense, given that subway stations can be quite far apart. Thus, we change our strategy for this prediction: We collect all existing subway stations and create incomplete triples of the form `(existing_station, SUBWAY_CONNECTS_TO, ??)`. Then we give a list of all stops in the transport network to the KGE model and let it predict the most likely ones to complete the incomplete triples. We then pick the top predictions among all triple completions and draw them on the map.
+    """
+    )
     return
 
 
 @app.cell
-def _(learning, prediction, testing, validation):
-    if False:
-        _loaded_model, _loaded_triples = learning.load_model("trained_models/RotatE")
+def _(mo, ready_to_predict: bool):
+    button_predict_subway = mo.ui.run_button(label="Predict Subway Connections", disabled=(not ready_to_predict))
+    button_predict_subway
+    return (button_predict_subway,)
 
-        _pred = prediction.PredictionMachine(_loaded_model, _loaded_triples, validation, testing)
-        _prediction_dataframe = _pred.predict_component(head="at:49:1530:0:4", rel="TRAM_CONNECTS_TO").sort_values(by=['score'], ascending=True)
-        _prediction_dataframe["tail_label"].tolist()
+
+@app.cell
+def _(
+    button_predict_subway,
+    display_connection_predictions,
+    extract_top_triples,
+    graph,
+    mo,
+    pd,
+    prediction,
+    predictor,
+    predictor_triples,
+    testing,
+    validation,
+):
+    if button_predict_subway.value:
+        with mo.status.spinner("Loading model...") as _spinner:       
+            _spinner.update("Collecting all subway stops...")
+            _subway_stations_query = f"""
+            MATCH (s:SubwayStation)
+            RETURN s.id as id
+            """
+            _subway_stations = [record["id"] for record in graph.execute_query(_subway_stations_query)]
+
+            _spinner.update("Collecting all possible target stops...")
+            _all_stops_query = f"""
+            MATCH (s:InUse)
+            RETURN s.id as id
+            """
+            _target_stops = [record["id"] for record in graph.execute_query(_all_stops_query)]
+        
+            _spinner.update("Predicting subway connections...")
+            _pred = prediction.PredictionMachine(predictor, predictor_triples, validation, testing)
+
+            _connection_predictions = []
+            #for station in _subway_stations:
+            for station in _subway_stations:
+                _single_prediction = _pred.predict_component(head=station, rel="SUBWAY_CONNECTS_TO", targets=_target_stops).nlargest(n=10, columns="score")
+                _single_prediction['head_label'] = station
+                _single_prediction['relation_label'] = "SUBWAY_CONNECTS_TO"
+                _connection_predictions.append(_single_prediction)
+
+            _spinner.update("Extracting top connections...")
+            _top_connections, _connected_stop_ids = extract_top_triples(pd.concat(_connection_predictions, ignore_index=True), n=20)
+
+            display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
     return
 
 
