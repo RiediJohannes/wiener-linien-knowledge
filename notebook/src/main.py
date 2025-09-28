@@ -501,7 +501,7 @@ def match_stops_with_districts(
         _stops_close_to_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 500)
         _summary = graph.connect_stop_to_subdistricts(_stops_close_to_districts, 'LOCATED_NEARBY')
         print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
-    
+
         check_locations_added()
 
     present.run_code(button_match_stops_to_districts.value, _match_stops_to_districts)
@@ -1368,9 +1368,7 @@ def _(mo):
         ])
     })
 
-    connections_map_refresh = mo.ui.refresh()
-
-    mo.hstack([connections_map_tabs, connections_map_refresh])
+    connections_map_tabs
     return (connections_map_tabs,)
 
 
@@ -1614,8 +1612,14 @@ def _(
 
 
 @app.cell
-def _(present):
-    button_query_triples = present.create_run_button(label="Query Training Triples")
+def _(
+    get_connections_added,
+    get_locations_added,
+    get_stop_clusters_created,
+    present,
+):
+    _button_kind = "neutral" if (get_stop_clusters_created() and get_locations_added() and get_connections_added()) else "danger"
+    button_query_triples = present.create_run_button(label="Query Training Triples", kind=_button_kind)
     return (button_query_triples,)
 
 
@@ -1895,20 +1899,35 @@ def _(get_trained_models, mo):
 
 
 @app.cell
-def _(kge_model_selection, learning, mo, print_raw):
-    _prompt = mo.md("To generate predictions, please **select** one of the trained **KGE models**.")
-    mo.output.append(mo.vstack([
-        _prompt,
-        kge_model_selection
-    ]))
+def _(kge_model_selection, learning, mo):
+    def _show_model_select_callout(status_message: str = None, kind="info"):
+        if status_message:
+            _callout = mo.callout(mo.md(f"""
+                To generate predictions, please **select** one of the trained **KGE models**.\n
+                {kge_model_selection}\n
+                {status_message}
+                """), kind=kind)
+        else:
+            _callout = mo.callout(mo.md(f"""
+                To generate predictions, please **select** one of the trained **KGE models**.\n
+                {kge_model_selection}
+                """), kind=kind)
+    
+        mo.output.replace(_callout)
+
 
     if kge_model_selection.value:
         predictor, predictor_triples = learning.load_model(kge_model_selection.value)
         predictor_testing_triples = learning.load_triples(kge_model_selection.value, False, True, True)
+    
         if predictor and predictor_triples and predictor_testing_triples:
-            print_raw(f"✅ Model '{kge_model_selection.value}' is ready to use!")
+            _model_status = mo.md(f"\n\n✅ Model `{kge_model_selection.value}` is ready to use!")
+            _show_model_select_callout(_model_status, kind="success")
         else:
-            print_raw("❌ Failed to load KGE model")
+            _model_status = mo.md("❌ Failed to load KGE model")
+            _show_model_select_callout(_model_status, kind="danger")
+    else:
+        _show_model_select_callout()
     return predictor, predictor_testing_triples, predictor_triples
 
 
