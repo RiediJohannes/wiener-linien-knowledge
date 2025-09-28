@@ -1655,22 +1655,6 @@ def _(mo):
 def _():
     # Prepare model training configurations
     training_configs = {
-        'TransE': {
-            'model': 'TransE',
-            'model_kwargs': {'embedding_dim': 128, 'scoring_fct_norm': 1}, # L1 norm said to work better with TransE
-            'optimizer_kwargs': {'lr': 0.001},
-            'training_kwargs': {'num_epochs': 200, 'batch_size': 256},
-            'negative_sampler': 'bernoulli',
-            'negative_sampler_kwargs': {'num_negs_per_pos': 3},
-            'loss': 'MarginRankingLoss',
-            'loss_kwargs': {'margin': 1.0},
-            'stopper': 'early',
-            'stopper_kwargs':dict(
-                patience=30,  # Stop if loss value doesn't improve for 30 iterations
-                frequency=15 # Check every 10 epochs
-            )
-        },
-
         'RotatE': {
             'model': 'RotatE', 
             'model_kwargs': {'embedding_dim': 256},
