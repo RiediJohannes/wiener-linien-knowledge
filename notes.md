@@ -88,6 +88,13 @@ They were particularly fond of:
   - 22:30-00:30
   - 1:30-
 
+### Zu tun:
+- Cover Pages ausfüllen
+- Ergebnisvisualisierungen zeigen
+- Validation Triples bei load_model auch laden
+- (Bezirke einzeichnen in Karte)
+- (Bestehende connections einzeichnen in Karte)
+
 ### Report
 
 27h

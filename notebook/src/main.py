@@ -1665,15 +1665,24 @@ def _(
             Training data has not been defined yet. Please execute the 'Query Training Triples' query above in order to proceed!
             """), kind="danger"))
 
-        # Save training metrics and training configuration to disk
-        training_results = learning.train_model(training, validation, testing, training_configs[model])
-        learning.save_training_results(model, training_results, validation_triples=validation, testing_triples=testing)
-        learning.save_training_config(model, training_configs[model])
+        epochs = training_configs[model]['training_kwargs']['num_epochs']
+        with mo.status.progress_bar(total=epochs,
+            title=f"Training model {model}...", subtitle="Please wait",
+            completion_title=f"Completed training {model}", completion_subtitle="",
+            show_eta=True, show_rate=True
+        ) as progress_bar:
 
-        set_trained_models(learning.get_models_summary()) # Trigger an update of the available models downstream
+            final_config = learning.add_progress_callback(training_configs[model], progress_bar)
+            training_results = learning.train_model(training, validation, testing, final_config)
 
-        # Display some immediate results to assess the quality of the trained model
-        return learning.summarize_training_metrics(training_results.metric_results)
+            # Save training metrics and training configuration to disk
+            learning.save_training_results(model, training_results, validation_triples=validation, testing_triples=testing)
+            learning.save_training_config(model, training_configs[model])
+
+            set_trained_models(learning.get_models_summary()) # Trigger an update of the available models downstream
+
+            # Display some immediate results to assess the quality of the trained model
+            return learning.summarize_training_metrics(training_results.metric_results)
     return (train_model,)
 
 
@@ -1684,10 +1693,11 @@ def _(present):
 
 
 @app.cell
-def _(button_train_model_rotate, mo, present, train_model):
-    _training_summary = present.run_code(button_train_model_rotate.value, train_model, model='RotatE')
-    if _training_summary is not None and not _training_summary.empty:
-        mo.output.append(_training_summary)
+def _(button_train_model_rotate, mo, train_model):
+    if button_train_model_rotate.value:
+        _training_summary = train_model(model="RotatE")
+        if _training_summary is not None and not _training_summary.empty:
+            mo.output.append(_training_summary)
     return
 
 
@@ -1712,10 +1722,11 @@ def _(present):
 
 
 @app.cell
-def _(button_train_model_complex, mo, present, train_model):
-    _training_summary = present.run_code(button_train_model_complex.value, train_model, model='ComplEx')
-    if _training_summary:
-        mo.output.append(_training_summary)
+def _(button_train_model_complex, mo, train_model):
+    if button_train_model_complex.value:
+        _training_summary = train_model(model="ComplEx")
+        if _training_summary is not None and not _training_summary.empty:
+            mo.output.append(_training_summary)
     return
 
 
@@ -1931,7 +1942,7 @@ def _(
             RETURN s.id as id
             """
             _target_stops = [record["id"] for record in graph.execute_query(_all_stops_query)]
-        
+
             _spinner.update("Predicting subway connections...")
             _pred = prediction.PredictionMachine(predictor, predictor_triples, validation, testing)
 

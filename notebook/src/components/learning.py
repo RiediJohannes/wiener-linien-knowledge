@@ -1,14 +1,16 @@
+import copy
+import json
 import os
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import torch
-import json
 from pykeen.evaluation import MetricResults, RankBasedEvaluator
 from pykeen.evaluation.rank_based_evaluator import RankBasedMetricKey
 from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult
+from pykeen.training import TrainingCallback
 from pykeen.triples import TriplesFactory, leakage
 
 
@@ -32,7 +34,7 @@ def generate_training_set(fact_triples: list[tuple[str, str, str]]) -> tuple[Tri
     return training, validation, testing
 
 
-def train_model(training: TriplesFactory, validation: TriplesFactory, testing: TriplesFactory, model_configuration: dict, seed = 42) -> PipelineResult:
+def train_model(training: TriplesFactory, validation: TriplesFactory, testing: TriplesFactory, model_configuration: dict, callback: TrainingCallback = None, seed = 42) -> PipelineResult:
     # Use all available CPU cores
     torch.set_num_threads(torch.get_num_threads())
 
@@ -50,6 +52,24 @@ def train_model(training: TriplesFactory, validation: TriplesFactory, testing: T
     print(f"Completed training for model {model_name}")
     return results
 
+def add_progress_callback(training_config: dict[str, Any], progress_bar) -> dict[str, Any]:
+    callback = ProgressBarCallback(progress_bar)
+
+    config_copy = copy.deepcopy(training_config)
+    training_kwargs = config_copy['training_kwargs']
+    training_kwargs['callbacks'] = [callback]
+    config_copy['training_kwargs'] = training_kwargs
+
+    return config_copy
+
+
+class ProgressBarCallback(TrainingCallback):
+    def __init__(self, bar):
+        super().__init__()
+        self.bar = bar
+
+    def post_epoch(self, epoch: int, epoch_loss: float, **kwargs):
+        self.bar.update(epoch)
 
 def save_training_results(model_name: str, results: PipelineResult,
                           validation_triples: TriplesFactory = None, testing_triples: TriplesFactory = None) -> None:
