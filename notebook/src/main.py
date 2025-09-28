@@ -123,6 +123,69 @@ def _(mo):
     return
 
 
+@app.cell
+def _(mo):
+    # Some global flags to keep track of what the user has already activated
+    get_stop_clusters_created, set_stop_clusters_created = mo.state(False)
+    get_locations_added, set_locations_added = mo.state(False)
+    get_connections_added, set_connections_added = mo.state(False)
+    get_trip_frequency_added, set_trip_frequency_added = mo.state(False)
+    return (
+        get_connections_added,
+        get_locations_added,
+        get_stop_clusters_created,
+        get_trip_frequency_added,
+        set_connections_added,
+        set_locations_added,
+        set_stop_clusters_created,
+        set_trip_frequency_added,
+    )
+
+
+@app.cell
+def _(
+    graph,
+    mo,
+    set_connections_added,
+    set_locations_added,
+    set_stop_clusters_created,
+    set_trip_frequency_added,
+):
+    def check_status_clusters_created():
+        condition_satisfied = len(graph.execute_query("MATCH (n:ClusterStop) LIMIT 1 RETURN 1")) > 0
+        set_stop_clusters_created(condition_satisfied)
+
+    def check_locations_added():
+        condition_satisfied = len(graph.execute_query("MATCH ()-[c:LOCATED_NEARBY]-() LIMIT 1 RETURN 1")) > 0
+        set_locations_added(condition_satisfied)
+
+    def check_status_connections_added():
+        condition_satisfied = len(graph.execute_query("MATCH ()-[c:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-() LIMIT 1 RETURN 1")) > 0
+        set_connections_added(condition_satisfied)
+
+    def check_trip_frequency_added():
+        condition_satisfied = len(graph.execute_query("MATCH (s:Service) WHERE s.operations_per_year IS NOT NULL LIMIT 1 RETURN 1")) > 0
+        set_trip_frequency_added(condition_satisfied)
+
+    check_status_clusters_created()
+    check_locations_added()
+    check_status_connections_added()
+    check_trip_frequency_added()
+
+    def show_warning(title: str, description: str):
+        mo.output.append(mo.callout(
+            mo.md(f"⚠️ **Warning: {title}** ⚠️  \n{description}"),
+            kind='warn')
+        )
+    return (
+        check_locations_added,
+        check_status_clusters_created,
+        check_status_connections_added,
+        check_trip_frequency_added,
+        show_warning,
+    )
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(
@@ -170,6 +233,7 @@ def _(button_merge_nearby_stops, graph, mo):
 @app.cell
 def merge_nearby_stops(
     button_continue_merging_nearby_stops,
+    check_status_clusters_created,
     geo,
     graph,
     merging_nearby_stops_is_safe: bool,
@@ -205,6 +269,8 @@ def merge_nearby_stops(
         print(f"""\nOperation successful:
         - Created {_summary.counters.relationships_created} relationships
         - Added {_summary.counters.labels_added} labels""")
+
+        check_status_clusters_created()
 
 
     present.run_code(merging_nearby_stops_is_safe or button_continue_merging_nearby_stops.value, _merge_nearby_stops,
@@ -315,13 +381,14 @@ def _(mo):
 
 @app.cell
 def _(present):
-    button_reassign_cluster_stops = present.create_run_button(label="Reassign Cluster Stops")
+    button_reassign_cluster_stops = present.create_run_button(label="Reassign Cluster Roots")
     return (button_reassign_cluster_stops,)
 
 
 @app.cell
 def reassign_cluster_stops(
     button_reassign_cluster_stops,
+    check_status_clusters_created,
     graph,
     operation_assign_cluster_root,
     present,
@@ -330,6 +397,7 @@ def reassign_cluster_stops(
         print("Re-assigning cluster stops...")
         _affected_rows = graph.execute_operation_returning_count(operation_assign_cluster_root)
         print(f"Affected {_affected_rows} nodes")
+        check_status_clusters_created(True)
 
     present.run_code(button_reassign_cluster_stops.value, _reassign_cluster_stops)
     return
@@ -412,6 +480,7 @@ def _(present):
 @app.cell
 def match_stops_with_districts(
     button_match_stops_to_districts,
+    check_locations_added,
     geo,
     graph,
     present,
@@ -432,6 +501,8 @@ def match_stops_with_districts(
         _stops_close_to_districts = geo.match_stops_to_subdistricts(_stops, _subdistricts, buffer_metres = 500)
         _summary = graph.connect_stop_to_subdistricts(_stops_close_to_districts, 'LOCATED_NEARBY')
         print(f"Created {_summary.counters.relationships_created} LOCATED_NEARBY relationships")
+    
+        check_locations_added()
 
     present.run_code(button_match_stops_to_districts.value, _match_stops_to_districts)
     return
@@ -515,6 +586,13 @@ def _(mo):
     """
     )
     return operation_cluster_located_in, operation_cluster_located_nearby
+
+
+@app.cell
+def _(get_stop_clusters_created, show_warning):
+    if not get_stop_clusters_created():
+        show_warning("Don't skip ahead!", "It seems like you haven't created any **stop clusters** yet. The following action only makes sense to execute _after_ the creation of stop clusters. Please execute all queries in order.")
+    return
 
 
 @app.cell
@@ -1155,6 +1233,7 @@ def _(present):
 @app.cell
 def calculate_trips_per_year(
     button_calculate_frequency_of_trips,
+    check_trip_frequency_added,
     graph,
     operation_calculate_frequency_of_trips,
     present,
@@ -1163,6 +1242,8 @@ def calculate_trips_per_year(
         print("Calculating operations per year for every trip...")
         _summary = graph.execute_operation(operation_calculate_frequency_of_trips)
         print(f"Calculated and (re)set {_summary.counters.properties_set} properties")
+
+        check_trip_frequency_added()
 
     present.run_code(button_calculate_frequency_of_trips.value, _calculate_frequency_of_trips)
     return
@@ -1202,13 +1283,18 @@ def _(mo):
 
 
 @app.cell
-def _(present):
-    button_find_connections_between_stops = present.create_run_button(label="Find Connections between Stops")
+def _(get_trip_frequency_added, present):
+    button_find_connections_between_stops = present.create_run_button(label="Find Connections between Stops", disabled=(not get_trip_frequency_added()))
     return (button_find_connections_between_stops,)
 
 
 @app.cell
-def _(button_find_connections_between_stops, graph, present):
+def _(
+    button_find_connections_between_stops,
+    check_status_connections_added,
+    graph,
+    present,
+):
     def _find_connections_between_stops():
         _operation = """
         // Consider each pair of stops that appears consecutively in some trip t
@@ -1233,6 +1319,8 @@ def _(button_find_connections_between_stops, graph, present):
             _summary = graph.execute_operation(_query)
             print(f"Created {_summary.counters.relationships_created} new '{connection}' relationships and set {_summary.counters.properties_set} yearly operations properties")
 
+        check_status_connections_added()
+
     present.run_code(button_find_connections_between_stops.value, _find_connections_between_stops)
     return
 
@@ -1253,22 +1341,6 @@ def _(mo):
 
 
 @app.cell
-def _(mo):
-    connections_map_tabs = mo.ui.tabs({
-        "Connection Types": mo.vstack([
-            mo.md("""_Shows the web of bus, tram and subway connections throughout Vienna._"""),
-        ]),
-        "Connection Frequency": mo.vstack([
-            mo.md(
-                "_Shows all direct transit connections and colours them by how often they are operated across the whole year._")
-        ])
-    })
-
-    connections_map_tabs
-    return (connections_map_tabs,)
-
-
-@app.cell
 def _(present):
     map_legend_mode_of_transport = (
         "Mode of Transport",
@@ -1282,6 +1354,24 @@ def _(present):
          for conn, colour in list(present.TransportMap.frequency_colours.items())[:-1]]
     )
     return map_legend_frequency, map_legend_mode_of_transport
+
+
+@app.cell
+def _(mo):
+    connections_map_tabs = mo.ui.tabs({
+        "Connection Types": mo.vstack([
+            mo.md("""_Shows the web of bus, tram and subway connections throughout Vienna._"""),
+        ]),
+        "Connection Frequency": mo.vstack([
+            mo.md(
+                "_Shows all direct transit connections and colours them by how often they are operated across the whole year._")
+        ])
+    })
+
+    connections_map_refresh = mo.ui.refresh()
+
+    mo.hstack([connections_map_tabs, connections_map_refresh])
+    return (connections_map_tabs,)
 
 
 @app.cell(hide_code=True)
@@ -1330,7 +1420,13 @@ def _(
 
 
 @app.cell
-def _(connections_map_get_data, mo, present):
+def _(
+    connections_map_get_data,
+    get_connections_added,
+    get_trip_frequency_added,
+    mo,
+    present,
+):
     def display_connections_map():
         transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
                                              visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
@@ -1349,7 +1445,15 @@ def _(connections_map_get_data, mo, present):
         return mo.vstack([mo.iframe(transport_map.as_html(), height=650), stop_disclaimer])
 
     # Visible output
-    mo.lazy(lambda: display_connections_map(), show_loading_indicator=True)
+    if get_connections_added() or get_trip_frequency_added():
+        mo.output.append(mo.lazy(lambda: display_connections_map(), show_loading_indicator=True))
+    return
+
+
+@app.cell
+def _(get_connections_added, show_warning):
+    if not get_connections_added():
+        show_warning("Nothing to show!", "The map above cannot show any public transit connections since you have not created the respective relationships yet. Please follow the notebook in order and execute every action (form top to bottom).")
     return
 
 
@@ -1495,6 +1599,18 @@ def _(mo):
     """
     )
     return (triples_queries,)
+
+
+@app.cell
+def _(
+    get_connections_added,
+    get_locations_added,
+    get_stop_clusters_created,
+    show_warning,
+):
+    if not (get_stop_clusters_created() and get_locations_added() and get_connections_added()):
+        show_warning("Missing Relationships", "It seems like you have not created all relationships as instructed in the notebook. If you query triples now, this will lead to incomplete training data.  \nPlease follow the notebook in order and execute every action for the full experience.")
+    return
 
 
 @app.cell
@@ -1842,7 +1958,7 @@ def _(
         _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12,
                                              visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
         _transport_map.add_transit_nodes(_stops_dict.values())
-        _transport_map.add_transit_connections(connections)
+        _transport_map.add_transit_connections(connections, uniform_thickness=3)
         _transport_map.add_legend(*map_legend_config)
 
         _map_output = mo.vstack([mo.iframe(_transport_map.as_html(), height=650)])
@@ -1991,7 +2107,7 @@ def _(
                 _connection_predictions.append(_single_prediction)
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(pd.concat(_connection_predictions, ignore_index=True), n=20)
+            _top_connections, _connected_stop_ids = extract_top_triples(pd.concat(_connection_predictions, ignore_index=True), n=30)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
     return

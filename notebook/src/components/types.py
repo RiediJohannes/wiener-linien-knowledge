@@ -85,10 +85,13 @@ class Connection:
         self.mode_of_transport: ModeOfTransport = mode_of_transport
         self.frequency: Frequency = frequency
 
-    def __str__(self):
+    def debug(self) -> str:
         if self.mode_of_transport != ModeOfTransport.ANY:
             return f"{self.from_stop.name} --[{self.mode_of_transport}]--> {self.to_stop.name}"
         elif self.frequency != Frequency.UNKNOWN:
             return f"{self.from_stop.name} --[{self.frequency}]--> {self.to_stop.name}"
         else:
             return f"{self.from_stop.name} --[UNKNOWN_RELATION]--> {self.to_stop.name}"
+
+    def __str__(self):
+        return f"{self.from_stop.name} --> {self.to_stop.name}"

@@ -94,7 +94,7 @@ They were particularly fond of:
 ### Zu tun:
 - Cover Pages ausfüllen
 - Ergebnisvisualisierungen zeigen
-- (Bezirke einzeichnen in Karte)
+- Know-how für KGEs zeigen
 - (Bestehende connections einzeichnen in Karte)
 
 Future work: Consider capacity of vehicles, not just frequency.

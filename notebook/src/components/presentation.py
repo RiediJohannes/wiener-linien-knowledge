@@ -6,7 +6,6 @@ from typing import Callable, Any, Literal
 
 import folium
 import marimo as mo
-from matplotlib import interactive
 from shapely import MultiPoint, wkt
 
 from components.types import SubDistrict
@@ -131,7 +130,7 @@ class TransportMap:
                 pane="stops"
             ).add_to(self.stop_marks)
 
-    def add_transit_connections(self, connections: list[Connection], include_nodes = False) -> None:
+    def add_transit_connections(self, connections: list[Connection], include_nodes = False, uniform_thickness: int | None = None) -> None:
         for conn in connections:
             line_coords = [
                 [conn.from_stop.display_lat(), conn.from_stop.display_lon()],
@@ -140,7 +139,7 @@ class TransportMap:
 
             if conn.mode_of_transport != ModeOfTransport.ANY:
                 colour = self.connection_colours[conn.mode_of_transport]
-                thickness = {
+                thickness = uniform_thickness if uniform_thickness else {
                     ModeOfTransport.SUBWAY: 3,
                     ModeOfTransport.TRAM: 2,
                     ModeOfTransport.BUS: 1
@@ -148,7 +147,7 @@ class TransportMap:
                 opacity = 0.7
             else:
                 colour = self.frequency_colours[conn.frequency]
-                thickness = {
+                thickness = uniform_thickness if uniform_thickness else {
                     Frequency.NONSTOP_TO: 3,
                     Frequency.VERY_FREQUENTLY_TO: 3,
                     Frequency.FREQUENTLY_TO: 2,
@@ -162,6 +161,7 @@ class TransportMap:
                 color=colour,
                 weight=thickness,
                 opacity=opacity,
+                tooltip=str(conn),
                 pane="connections"
             ).add_to(self.connections)
 
