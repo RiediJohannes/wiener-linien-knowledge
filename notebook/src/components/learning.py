@@ -1,7 +1,7 @@
 import copy
 import json
 import os
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,6 @@ from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult
 from pykeen.training import TrainingCallback
 from pykeen.triples import TriplesFactory, leakage
-
 
 MODELS_SOURCE = os.path.join("notebook", "trained_models")
 if not os.path.exists(MODELS_SOURCE):
@@ -52,8 +51,8 @@ def train_model(training: TriplesFactory, validation: TriplesFactory, testing: T
     print(f"Completed training for model {model_name}")
     return results
 
-def add_progress_callback(training_config: dict[str, Any], progress_bar) -> dict[str, Any]:
-    callback = ProgressBarCallback(progress_bar)
+def add_progress_callback(training_config: dict[str, Any], on_progress: Callable[[int, float], Any]) -> dict[str, Any]:
+    callback = SimpleProgressCallback(on_progress)
 
     config_copy = copy.deepcopy(training_config)
     training_kwargs = config_copy['training_kwargs']
@@ -62,14 +61,14 @@ def add_progress_callback(training_config: dict[str, Any], progress_bar) -> dict
 
     return config_copy
 
-
-class ProgressBarCallback(TrainingCallback):
-    def __init__(self, bar):
+class SimpleProgressCallback(TrainingCallback):
+    def __init__(self, progress_callback: Callable[[int, float], Any]):
         super().__init__()
-        self.bar = bar
+        self.callback = progress_callback
 
     def post_epoch(self, epoch: int, epoch_loss: float, **kwargs):
-        self.bar.update(epoch)
+        self.callback(epoch, epoch_loss)
+
 
 def save_training_results(model_name: str, results: PipelineResult,
                           validation_triples: TriplesFactory = None, testing_triples: TriplesFactory = None) -> None:

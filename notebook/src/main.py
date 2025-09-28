@@ -1553,7 +1553,7 @@ def _():
         },
 
         'RotatE': {
-            'model': 'RotatE',
+            'model': 'RotatE', 
             'model_kwargs': {'embedding_dim': 256},
             'optimizer_kwargs': {'lr': 0.0004},
             'training_kwargs': {'num_epochs': 450, 'batch_size': 512},
@@ -1667,12 +1667,12 @@ def _(
 
         epochs = training_configs[model]['training_kwargs']['num_epochs']
         with mo.status.progress_bar(total=epochs,
-            title=f"Training model {model}...", subtitle="Please wait",
+            title=f"Training model {model} ...", subtitle="Please wait",
             completion_title=f"Completed training {model}", completion_subtitle="",
             show_eta=True, show_rate=True
         ) as progress_bar:
 
-            final_config = learning.add_progress_callback(training_configs[model], progress_bar)
+            final_config = learning.add_progress_callback(training_configs[model], lambda _epoch, _loss : progress_bar.update(1))
             training_results = learning.train_model(training, validation, testing, final_config)
 
             # Save training metrics and training configuration to disk
@@ -1769,14 +1769,13 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(get_trained_models, mo):
     _trained_models = get_trained_models()
-    model_names = _trained_models['name'].tolist() if not _trained_models.empty else []
+    model_names = _trained_models['name'].tolist()
 
     kge_model_selection = mo.ui.dropdown(
         label="Select model: ",
         options=model_names,
         value=None
     )
-
     return (kge_model_selection,)
 
 
