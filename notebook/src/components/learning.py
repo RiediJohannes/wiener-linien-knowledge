@@ -11,7 +11,10 @@ from pykeen.models import Model
 from pykeen.pipeline import pipeline, PipelineResult
 from pykeen.triples import TriplesFactory, leakage
 
+
 MODELS_SOURCE = os.path.join("notebook", "trained_models")
+if not os.path.exists(MODELS_SOURCE):
+    os.makedirs(MODELS_SOURCE)
 
 def generate_training_set(fact_triples: list[tuple[str, str, str]]) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
     triples_array = np.array(fact_triples)
@@ -20,7 +23,7 @@ def generate_training_set(fact_triples: list[tuple[str, str, str]]) -> tuple[Tri
     training, validation, testing = tf.split([0.8, 0.1, 0.1], random_state=42)
 
     # Reduce data leakage between training and testing triples
-    core_training, core_validation, core_testing = leakage.unleak(training, validation, testing, n=0.4)
+    core_training, core_validation, core_testing = leakage.unleak(training, validation, testing)
 
     training.mapped_triples = core_training.mapped_triples
     validation.mapped_triples = core_validation.mapped_triples

@@ -1553,7 +1553,7 @@ def _():
         },
 
         'RotatE': {
-            'model': 'RotatE', 
+            'model': 'RotatE',
             'model_kwargs': {'embedding_dim': 256},
             'optimizer_kwargs': {'lr': 0.0004},
             'training_kwargs': {'num_epochs': 450, 'batch_size': 512},
@@ -1758,13 +1758,14 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(get_trained_models, mo):
     _trained_models = get_trained_models()
-    model_names = _trained_models['name'].tolist()
+    model_names = _trained_models['name'].tolist() if not _trained_models.empty else []
 
     kge_model_selection = mo.ui.dropdown(
         label="Select model: ",
         options=model_names,
         value=None
     )
+
     return (kge_model_selection,)
 
 
