@@ -1840,14 +1840,14 @@ def _(
 
 @app.cell
 def _(mo, ready_to_predict: bool):
-    button_predict_bus_tram = mo.ui.run_button(label="Predict Bus Connections", disabled=(not ready_to_predict))
-    button_predict_bus_tram
-    return (button_predict_bus_tram,)
+    button_predict_bus_connections = mo.ui.run_button(label="Predict Bus Connections", disabled=(not ready_to_predict))
+    button_predict_bus_connections
+    return (button_predict_bus_connections,)
 
 
 @app.cell
 def _(
-    button_predict_bus_tram,
+    button_predict_bus_connections,
     display_connection_predictions,
     extract_top_triples,
     graph,
@@ -1857,17 +1857,52 @@ def _(
     predictor_testing_triples,
     predictor_triples,
 ):
-    if button_predict_bus_tram.value:
+    if button_predict_bus_connections.value:
         with mo.status.spinner("Loading model...") as _spinner:
             _spinner.update("Collecting stop neighbourhoods...")
             _stops_with_neighbours = graph.get_nearby_stops()
 
             _spinner.update("Scoring connections triples...")
             _pred = prediction.PredictionMachine(predictor, predictor_triples, *predictor_testing_triples)
-            _bus_tram_connection_scores = _pred.score_potential_connections(_stops_with_neighbours)
+            _bus_connection_scores = _pred.score_potential_connections(_stops_with_neighbours, connection_types=["BUS_CONNECTS_TO"])
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(_bus_tram_connection_scores, n=40)
+            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=40)
+
+            display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
+    return
+
+
+@app.cell
+def _(mo, ready_to_predict: bool):
+    button_predict_tram_connections = mo.ui.run_button(label="Predict Tram Connections", disabled=(not ready_to_predict))
+    button_predict_tram_connections
+    return (button_predict_tram_connections,)
+
+
+@app.cell
+def _(
+    button_predict_tram_connections,
+    display_connection_predictions,
+    extract_top_triples,
+    graph,
+    mo,
+    prediction,
+    predictor,
+    predictor_testing_triples,
+    predictor_triples,
+):
+    if button_predict_tram_connections.value:
+        with mo.status.spinner("Loading model...") as _spinner:
+            _spinner.update("Collecting stop neighbourhoods...")
+            _stops_with_neighbours = graph.get_nearby_stops()
+
+            _spinner.update("Scoring connections triples...")
+            _pred = prediction.PredictionMachine(predictor, predictor_triples, *predictor_testing_triples)
+            _tram_connection_scores = _pred.score_potential_connections(_stops_with_neighbours, connection_types=["TRAM_CONNECTS_TO"])
+
+            _spinner.update("Extracting top connections...")
+            _top_connections, _connected_stop_ids = extract_top_triples(_tram_connection_scores, n=40)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
     return
@@ -1927,7 +1962,11 @@ def _(
             _connection_predictions = []
             #for station in _subway_stations:
             for station in _subway_stations:
-                _single_prediction = _pred.predict_component(head=station, rel="SUBWAY_CONNECTS_TO", targets=_target_stops - {station}).nlargest(n=10, columns="score")
+                _single_prediction = _pred.predict_component(
+                    head=station, rel="SUBWAY_CONNECTS_TO",
+                    targets=_target_stops - {station}
+                ).nlargest(n=10, columns="score")
+            
                 _single_prediction['head_label'] = station
                 _single_prediction['relation_label'] = "SUBWAY_CONNECTS_TO"
                 _connection_predictions.append(_single_prediction)
