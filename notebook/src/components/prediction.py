@@ -26,7 +26,7 @@ class PredictionMachine:
 
         return self.score_triples(triples, order_ascending=order_ascending)
 
-    def predict_connection_frequency(self, stops_with_targets: list[tuple[str, list[str]]], order_ascending = False):
+    def predict_connection_frequency(self, stops_with_targets: list[tuple[str, list[str]]], order_ascending = False, apply_filter=False):
         frequency_relations = ["NONSTOP_TO", "VERY_FREQUENTLY_TO", "FREQUENTLY_TO", "REGULARLY_TO", "OCCASIONALLY_TO", "RARELY_TO"]
         triples = [
             (start, relation, target)
@@ -35,7 +35,7 @@ class PredictionMachine:
             for relation in frequency_relations
         ]
 
-        scored_df = self.score_triples(triples, order_ascending=order_ascending, apply_filter=False)
+        scored_df = self.score_triples(triples, order_ascending=order_ascending, apply_filter=apply_filter)
 
         # Keep only the highest-scoring relation for each (start, target) pair
         filtered_df = (

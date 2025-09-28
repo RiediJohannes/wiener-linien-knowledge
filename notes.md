@@ -88,14 +88,18 @@ They were particularly fond of:
   - 22:30-00:30
   - 1:30-5:30
 - 28.9.
-  - 17:30
+  - 17:30-19:30
+  - 21:30-
 
 ### Zu tun:
 - Cover Pages ausfüllen
 - Ergebnisvisualisierungen zeigen
-- Validation Triples bei load_model auch laden
 - (Bezirke einzeichnen in Karte)
 - (Bestehende connections einzeichnen in Karte)
+
+Future work: Consider capacity of vehicles, not just frequency.
+Not just relate stops "close to" each other but also create relations like "middle range" -> important for subway connections
+
 
 ### Report
 

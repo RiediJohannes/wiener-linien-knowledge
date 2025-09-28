@@ -1264,8 +1264,29 @@ def _(mo):
     return (connections_map_tabs,)
 
 
+@app.cell
+def _(present):
+    map_legend_mode_of_transport = (
+        "Mode of Transport",
+        [(present.snake_to_title_case(conn.name), colour)
+         for conn, colour in list(present.TransportMap.connection_colours.items())[:-1]]
+    )
+
+    map_legend_frequency = (
+        "Connection Frequency",
+        [(present.snake_to_title_case(conn.name, remove_words=["to"]), colour)
+         for conn, colour in list(present.TransportMap.frequency_colours.items())[:-1]]
+    )
+    return map_legend_frequency, map_legend_mode_of_transport
+
+
 @app.cell(hide_code=True)
-def _(connections_map_tabs, graph, present):
+def _(
+    connections_map_tabs,
+    graph,
+    map_legend_frequency,
+    map_legend_mode_of_transport,
+):
     # Behind the scenes: Query the respective data based on the user-selection
     def connections_map_get_data():
         active_tab = connections_map_tabs.value
@@ -1280,10 +1301,7 @@ def _(connections_map_tabs, graph, present):
             RETURN DISTINCT s as from, t as to, type(c) as label
             """
             connections = graph.get_connections(connections_query)
-
-            legend_entries = [(present.snake_to_title_case(conn.name), colour)
-                              for conn, colour in list(present.TransportMap.connection_colours.items())[:-1]]
-            legend_config = ("Mode of Transport", legend_entries)
+            legend_config = map_legend_mode_of_transport
 
         elif active_tab == "Connection Frequency":
             connections_query = """
@@ -1301,10 +1319,7 @@ def _(connections_map_tabs, graph, present):
             RETURN DISTINCT s1 as from, level_of_service as label, s2 as to
             """
             connections = graph.get_connections(connections_query)
-
-            legend_entries = [(present.snake_to_title_case(conn.name, remove_words=["to"]), colour)
-                              for conn, colour in list(present.TransportMap.frequency_colours.items())[:-1]]
-            legend_config = ("Connection Frequency", legend_entries)
+            legend_config = map_legend_frequency
 
         return nodes, connections, legend_config
     return (connections_map_get_data,)
@@ -1813,7 +1828,7 @@ def _(
 
         return connection_triples, stops_set
 
-    def display_connection_predictions(connection_triples, connected_stops, spinner):
+    def display_connection_predictions(connection_triples, connected_stops, map_legend_config, spinner):
         spinner.update("Requesting stop data from database...")
         _stops_dict = {stop.id: stop for stop in graph.get_stops(id_list=list(connected_stops))}
 
@@ -1824,10 +1839,7 @@ def _(
                                              visible_layers=present.VisibleLayers.STOPS | present.VisibleLayers.CONNECTIONS)
         _transport_map.add_transit_nodes(_stops_dict.values())
         _transport_map.add_transit_connections(connections)
-
-        _legend_entries = [(present.snake_to_title_case(conn.name), colour)
-                          for conn, colour in list(present.TransportMap.connection_colours.items())[:-1]]
-        _transport_map.add_legend("Mode of Transport", _legend_entries)
+        _transport_map.add_legend(*map_legend_config)
 
         _map_output = mo.vstack([mo.iframe(_transport_map.as_html(), height=650)])
         mo.output.replace_at_index(_map_output, 0)
@@ -1851,6 +1863,7 @@ def _(
     display_connection_predictions,
     extract_top_triples,
     graph,
+    map_legend_mode_of_transport,
     mo,
     prediction,
     predictor,
@@ -1869,7 +1882,7 @@ def _(
             _spinner.update("Extracting top connections...")
             _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=40)
 
-            display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
+            display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
     return
 
 
@@ -1886,6 +1899,7 @@ def _(
     display_connection_predictions,
     extract_top_triples,
     graph,
+    map_legend_mode_of_transport,
     mo,
     prediction,
     predictor,
@@ -1902,9 +1916,9 @@ def _(
             _tram_connection_scores = _pred.score_potential_connections(_stops_with_neighbours, connection_types=["TRAM_CONNECTS_TO"])
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(_tram_connection_scores, n=40)
+            _top_connections, _connected_stop_ids = extract_top_triples(_tram_connection_scores, n=80)
 
-            display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
+            display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
     return
 
 
@@ -1933,6 +1947,7 @@ def _(
     display_connection_predictions,
     extract_top_triples,
     graph,
+    map_legend_mode_of_transport,
     mo,
     pd,
     prediction,
@@ -1974,7 +1989,43 @@ def _(
             _spinner.update("Extracting top connections...")
             _top_connections, _connected_stop_ids = extract_top_triples(pd.concat(_connection_predictions, ignore_index=True), n=20)
 
-            display_connection_predictions(_top_connections, _connected_stop_ids, _spinner)
+            display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
+    return
+
+
+@app.cell
+def _(mo, ready_to_predict: bool):
+    button_predict_frequency = mo.ui.run_button(label="Predict Connection Frequencies", disabled=(not ready_to_predict))
+    button_predict_frequency
+    return (button_predict_frequency,)
+
+
+@app.cell
+def _(
+    button_predict_frequency,
+    display_connection_predictions,
+    extract_top_triples,
+    graph,
+    map_legend_frequency,
+    mo,
+    prediction,
+    predictor,
+    predictor_testing_triples,
+    predictor_triples,
+):
+    if button_predict_frequency.value:
+        with mo.status.spinner("Loading model...") as _spinner:
+            _spinner.update("Collecting stop neighbourhoods...")
+            _stops_with_neighbours = graph.get_nearby_stops()
+
+            _spinner.update("Scoring connection triples...")
+            _pred = prediction.PredictionMachine(predictor, predictor_triples, *predictor_testing_triples)
+            _bus_connection_scores = _pred.predict_connection_frequency(_stops_with_neighbours, apply_filter=False)
+
+            _spinner.update("Extracting top connections...")
+            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=400)
+
+            display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_frequency, _spinner)
     return
 
 
