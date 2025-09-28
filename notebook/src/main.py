@@ -722,6 +722,7 @@ def _(
     def stops_map_get_data():
         active_tab = get_stops_map_tab() # stops_map_tabs.value
         stops = []
+        districts = []
         description = "No data selected"
 
         if active_tab == "All Stops":
@@ -742,9 +743,10 @@ def _(
             district = stops_map_district_num_combobox.value
             subdistrict = stops_map_subdistrict_num_combobox.value
             stops = graph.get_stops_for_subdistrict(district, subdistrict)
-            description = f"District {district}, Subdistrict {subdistrict}"
+            districts = graph.get_subdistricts(id_list=[f"{district}-{subdistrict}"])
+            description = f"{districts[0].name} ({district}-{subdistrict})" if districts else "Unknown district"
 
-        return stops, description
+        return stops, description, districts
     return (stops_map_get_data,)
 
 
@@ -755,12 +757,13 @@ def _(mo, present, stops_map_get_data, stops_map_search_button):
     # Query the requested stops and display them on a map
     if stops_map_search_button.value:
         with mo.status.spinner(title="Running query..."):
-            _stops, _description = stops_map_get_data()
+            _stops, _description, _subdistricts = stops_map_get_data()
 
             _transport_map = present.TransportMap(lat=48.2102331, lon=16.3796424, zoom=12)
             _transport_map.add_stops(_stops)
+            _transport_map.add_subdistricts(_subdistricts, visible=(len(_subdistricts)>0))
             _heading = mo.md(f"**{_description}**")
-
+        
             # Display the results
             _iframe = mo.iframe(_transport_map.as_html(), height=650)
             _stack = [_heading, _iframe]

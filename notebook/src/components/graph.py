@@ -20,20 +20,28 @@ def is_available():
     except:
         return False
 
-def get_subdistricts() -> list[SubDistrict]:
-    query = """
+def get_subdistricts(id_list: list[str] = None) -> list[SubDistrict]:
+    filter_clause = """
+        WITH s, s.district_num + '-' + s.sub_district_num as sid
+        WHERE sid in $id_list
+    """ if id_list else ""
+
+    query = f"""
     MATCH (s:SubDistrict)
+    {filter_clause}
     RETURN s.district_num as district,
            s.sub_district_num as subdistrict,
+           s.name as name,
            s.population as population,
            s.area as area,
            s.shape as shape;
     """
-    results = execute_query(query)
+    results = execute_query(query, id_list=id_list)
 
     return [SubDistrict(
         record["district"],
         record["subdistrict"],
+        record["name"],
         record["population"],
         record["area"],
         record["shape"]
@@ -82,14 +90,14 @@ def get_stop_cluster(stop_identifier = None) -> list[Stop] | None:
     response = execute_query(query)
     return _parse_stops_from_response(response)
 
-def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_stops_within = False) -> list[Stop] | None:
+def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_stops_within = False, with_clusters=True) -> list[Stop] | None:
     base_query = f"""
     MATCH (d:SubDistrict)
     WHERE d.district_num = $dist_num AND d.sub_district_num = $subdist_num
     MATCH (s:Stop)-[:{"LOCATED_IN" if only_stops_within else "LOCATED_NEARBY"}]->(d)
     """
 
-    query = _finalize_stop_query(base_query, "s")
+    query = _finalize_stop_query(base_query, "s", with_clusters=with_clusters)
     response = execute_query(query, dist_num=district_code, subdist_num=subdistrict_code)
     return _parse_stops_from_response(response)
 

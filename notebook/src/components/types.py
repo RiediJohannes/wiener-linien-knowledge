@@ -31,8 +31,9 @@ class ClusterStop(Stop):
         return self.cluster_lat
 
 class SubDistrict:
-    def __init__(self, district_num: int, subdistrict_num: int, population: int, area: float, shape: str):
+    def __init__(self, district_num: int, subdistrict_num: int, name: str, population: int, area: float, shape: str):
         self.id: str = f"{district_num}-{subdistrict_num}"
+        self.name: str = name
         self.population: int = population
         self.area: float = area
         self.shape: str = shape

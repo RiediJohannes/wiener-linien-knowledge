@@ -6,8 +6,10 @@ from typing import Callable, Any, Literal
 
 import folium
 import marimo as mo
-from shapely import MultiPoint
+from matplotlib import interactive
+from shapely import MultiPoint, wkt
 
+from components.types import SubDistrict
 from src.components.types import Stop, ClusterStop, Connection, ModeOfTransport, Frequency
 
 
@@ -16,7 +18,8 @@ class VisibleLayers(Flag):
     STOPS = auto()
     CLUSTERS = auto()
     CONNECTIONS = auto()
-    ALL = STOPS | CLUSTERS | CONNECTIONS
+    DISTRICTS = auto()
+    ALL = STOPS | CLUSTERS | CONNECTIONS | DISTRICTS
 
 class TransportMap:
     connection_colours: dict[ModeOfTransport, str] = {
@@ -64,6 +67,8 @@ class TransportMap:
         self.cluster_marks = folium.FeatureGroup(name="Cluster markers", control=clusters_visible, show=clusters_visible).add_to(self.base)
         connections_visible = VisibleLayers.CONNECTIONS in visible_layers
         self.connections = folium.FeatureGroup(name="Transit connections", control=connections_visible, show=connections_visible).add_to(self.base)
+        districts_visible = VisibleLayers.DISTRICTS in visible_layers
+        self.subdistricts = folium.FeatureGroup(name="Subdistricts", control=districts_visible, show=districts_visible).add_to(self.base)
 
         folium.LayerControl().add_to(self.base)
         # Keep stop markers in front so they remain clickable
@@ -73,6 +78,7 @@ class TransportMap:
         folium.map.CustomPane("clusters", z_index=600).add_to(self.base)
         folium.map.CustomPane("stops", z_index=800).add_to(self.base)
         folium.map.CustomPane("connections", z_index=700).add_to(self.base)
+        folium.map.CustomPane("districts", z_index=400).add_to(self.base)
 
 
     def add_stops(self, stops: list[Stop]) -> None:
@@ -162,6 +168,28 @@ class TransportMap:
             if include_nodes:
                 self.add_transit_nodes([conn.from_stop, conn.to_stop])
 
+    def add_subdistricts(self, subdistricts: list[SubDistrict], visible=True) -> None:
+        for district in subdistricts:
+            # Get the coordinates of the subdistricts outline from its WKT shape
+            geometry = wkt.loads(district.shape)
+            coords = [(lat, lon) for lon, lat in geometry.exterior.coords]
+
+            # Create a polygon on the map
+            folium.Polygon(
+                locations=coords,
+                color='green',
+                weight=1,
+                fill=True,
+                fill_opacity=0.1,
+                opacity=0.3,
+                tooltip=district.name,
+                pane="districts",
+                interactive=False
+            ).add_to(self.subdistricts)
+
+        self.subdistricts.control = visible
+        self.subdistricts.show = visible
+
     def add_legend(self, title: str, entries: list[tuple[str, str]]):
         legend_html = self._create_color_map_legend(title, entries)
         self.base.get_root().html.add_child(folium.Element(legend_html))
@@ -229,6 +257,7 @@ class TransportMap:
           }}
         </style>
         '''
+
 
 class MarimoHtmlOutput(io.StringIO):
     """
