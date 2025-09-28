@@ -136,7 +136,7 @@ def get_models_summary() -> pd.DataFrame:
     for model_name in available_models():
         try:
             config = load_training_config(model_name)
-            training_triples, _, _ = load_triples(model_name)
+            training_triples = load_triples(model_name)[0]
 
             # Get basic model info
             summary = {
@@ -179,9 +179,9 @@ def load_training_results(model_name: str) -> pd.DataFrame:
     model_dir = _get_model_path(model_name)
     return load_training_results_from_path(model_dir)
 
-def load_triples(model_name: str) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
+def load_triples(model_name: str, training: bool = True, validation: bool = False, testing: bool = False) -> list[TriplesFactory]:
     model_dir = _get_model_path(model_name)
-    return load_triples_from_path(model_dir)
+    return load_triples_from_path(model_dir, training, validation, testing)
 
 def load_training_config(model_name: str):
     model_dir = _get_model_path(model_name)
@@ -204,12 +204,16 @@ def load_training_results_from_path(model_dir_path: str) -> pd.DataFrame:
     csv_path = os.path.join(_get_model_source_dir(model_dir_path), 'metrics.csv')
     return pd.read_csv(csv_path)
 
-def load_triples_from_path(model_dir_path: str) -> tuple[TriplesFactory, TriplesFactory, TriplesFactory]:
+def load_triples_from_path(model_dir_path: str, training: bool = True, validation: bool = False, testing: bool = False) -> list[TriplesFactory]:
     triples_source = _get_model_source_dir(model_dir_path)
-    training = TriplesFactory.from_path_binary(path=os.path.join(triples_source, "training_triples"))
-    validation = TriplesFactory.from_path_binary(path=os.path.join(triples_source, "validation_triples"))
-    testing = TriplesFactory.from_path_binary(path=os.path.join(triples_source, "testing_triples"))
-    return training, validation, testing
+    inclusions_dict = {
+        "training_triples": training,
+        "validation_triples": validation,
+        "testing_triples": testing,
+    }
+
+    return [TriplesFactory.from_path_binary(path=os.path.join(triples_source, triples_name))
+            for triples_name, do_include in inclusions_dict.items() if do_include]
 
 def load_training_config_from_path(model_dir_path: str):
     config_json_path = os.path.join(_get_model_source_dir(model_dir_path), 'config.json')

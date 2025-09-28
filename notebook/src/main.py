@@ -1789,11 +1789,12 @@ def _(kge_model_selection, learning, mo, print_raw):
 
     if kge_model_selection.value:
         predictor, predictor_triples = learning.load_model(kge_model_selection.value)
-        if predictor and predictor_triples:
+        predictor_testing_triples = learning.load_triples(kge_model_selection.value, False, True, True)
+        if predictor and predictor_triples and predictor_testing_triples:
             print_raw(f"✅ Model '{kge_model_selection.value}' is ready to use!")
         else:
             print_raw("❌ Failed to load KGE model")
-    return predictor, predictor_triples
+    return predictor, predictor_testing_triples, predictor_triples
 
 
 @app.cell(hide_code=True)
@@ -1873,9 +1874,8 @@ def _(
     mo,
     prediction,
     predictor,
+    predictor_testing_triples,
     predictor_triples,
-    testing,
-    validation,
 ):
     if button_predict_bus_tram.value:
         with mo.status.spinner("Loading model...") as _spinner:
@@ -1883,7 +1883,7 @@ def _(
             _stops_with_neighbours = graph.get_nearby_stops()
 
             _spinner.update("Scoring connections triples...")
-            _pred = prediction.PredictionMachine(predictor, predictor_triples, validation, testing)
+            _pred = prediction.PredictionMachine(predictor, predictor_triples, *predictor_testing_triples)
             _bus_tram_connection_scores = _pred.score_potential_connections(_stops_with_neighbours)
 
             _spinner.update("Extracting top connections...")
@@ -1922,9 +1922,8 @@ def _(
     pd,
     prediction,
     predictor,
+    predictor_testing_triples,
     predictor_triples,
-    testing,
-    validation,
 ):
     if button_predict_subway.value:
         with mo.status.spinner("Loading model...") as _spinner:       
@@ -1943,7 +1942,7 @@ def _(
             _target_stops = [record["id"] for record in graph.execute_query(_all_stops_query)]
 
             _spinner.update("Predicting subway connections...")
-            _pred = prediction.PredictionMachine(predictor, predictor_triples, validation, testing)
+            _pred = prediction.PredictionMachine(predictor, predictor_triples, *predictor_testing_triples)
 
             _connection_predictions = []
             #for station in _subway_stations:

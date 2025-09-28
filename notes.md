@@ -86,7 +86,9 @@ They were particularly fond of:
 - 27.9.
   - 14:00-19:30
   - 22:30-00:30
-  - 1:30-
+  - 1:30-5:30
+- 28.9.
+  - 17:30
 
 ### Zu tun:
 - Cover Pages ausfüllen
