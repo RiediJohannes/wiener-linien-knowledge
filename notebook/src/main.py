@@ -1695,7 +1695,7 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(r"""The following table shows the **training configuration** used for each model:""")
+    mo.md(r"""The following table shows the **training configuration** currently set for each model:""")
     return
 
 
@@ -1713,10 +1713,6 @@ def _(mo, pd, training_configs):
             else:
                 items[new_key] = val
         return items
-
-    flat_config = flatten_config(training_configs['TransE'])
-    df = pd.DataFrame.from_dict(flat_config, orient='index', columns=['Value'])
-    df.index.name = 'Parameter'
 
     # Flatten each model's config
     flattened_configs = {}
@@ -1854,6 +1850,43 @@ def _(get_trained_models, mo):
             for the presence of pretrained models in `notebook/trained_models/`."""),
             kind='warn')
         )
+    return
+
+
+@app.cell
+def _(get_trained_models, learning, mo, pd):
+    mo.output.append(mo.md("### Training Scores"))
+
+    metrics_of_interest = {
+        "Hits@10":   ("both", "realistic", "hits_at_10"),
+        "Hits@3":    ("both", "realistic", "hits_at_3"),
+        "Hits@1":    ("both", "realistic", "hits_at_1"),
+        "Mean Rank": ("both", "realistic", "arithmetic_mean_rank"),
+        "MRR":       ("both", "realistic", "inverse_harmonic_mean_rank"),
+    }
+
+    rows = []
+    for _model in get_trained_models()["name"]:
+        _results_df = learning.load_training_results(_model)
+        row = {"Model": _model}
+        for col_name, (side, rank, metric) in metrics_of_interest.items():
+            value = (
+                _results_df.loc[
+                    (_results_df["Side"] == side)
+                    & (_results_df["Rank_type"] == rank)
+                    & (_results_df["Metric"] == metric),
+                    "Value"
+                ]
+                .squeeze()   # get scalar if exactly one match
+            )
+            row[col_name] = value
+        rows.append(row)
+
+    final_df = (pd.DataFrame(rows)
+        .sort_values(by="Hits@10", ascending=False)
+        .reset_index(drop=True))
+
+    mo.output.append(mo.ui.table(final_df, selection=None, pagination=False))
     return
 
 
