@@ -154,12 +154,6 @@ def get_models_summary() -> pd.DataFrame:
             model_summaries.append(summary)
         except Exception as e:
             print(f"Warning: Could not load model '{model_name}': {e}")
-            # Add a basic entry even if model loading fails
-            model_summaries.append({
-                'name': model_name,
-                'model_type': 'Unknown',
-                'error': str(e)
-            })
 
     # Convert to DataFrame
     if model_summaries:

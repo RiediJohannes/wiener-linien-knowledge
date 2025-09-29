@@ -1908,7 +1908,7 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(get_trained_models, mo):
     _trained_models = get_trained_models()
-    model_names = _trained_models['name'].tolist()
+    model_names = _trained_models['Name'].tolist()
 
     kge_model_selection = mo.ui.dropdown(
         label="Select model: ",
