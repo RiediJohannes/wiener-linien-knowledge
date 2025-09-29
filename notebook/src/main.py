@@ -1976,12 +1976,15 @@ def _(
 @app.cell
 def _(mo, ready_to_predict: bool):
     button_predict_bus_connections = mo.ui.run_button(label="Predict Bus Connections", disabled=(not ready_to_predict))
-    button_predict_bus_connections
-    return (button_predict_bus_connections,)
+    bus_connections_slider = mo.ui.slider(start=1, stop=200, step=1, value=40, show_value=True, debounce=True, label="Predictions:")
+
+    mo.hstack([button_predict_bus_connections, bus_connections_slider])
+    return bus_connections_slider, button_predict_bus_connections
 
 
 @app.cell
 def _(
+    bus_connections_slider,
     button_predict_bus_connections,
     display_connection_predictions,
     extract_top_triples,
@@ -2003,7 +2006,7 @@ def _(
             _bus_connection_scores = _pred.score_potential_connections(_stops_with_neighbours, connection_types=["BUS_CONNECTS_TO"])
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=8)
+            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=bus_connections_slider.value)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
     return
@@ -2012,8 +2015,10 @@ def _(
 @app.cell
 def _(mo, ready_to_predict: bool):
     button_predict_tram_connections = mo.ui.run_button(label="Predict Tram Connections", disabled=(not ready_to_predict))
-    button_predict_tram_connections
-    return (button_predict_tram_connections,)
+    tram_connections_slider = mo.ui.slider(start=1, stop=200, step=1, value=40, show_value=True, debounce=True, label="Predictions:")
+
+    mo.hstack([button_predict_tram_connections, tram_connections_slider])
+    return button_predict_tram_connections, tram_connections_slider
 
 
 @app.cell
@@ -2028,6 +2033,7 @@ def _(
     predictor,
     predictor_testing_triples,
     predictor_triples,
+    tram_connections_slider,
 ):
     if button_predict_tram_connections.value:
         with mo.status.spinner("Loading model...") as _spinner:
@@ -2039,7 +2045,7 @@ def _(
             _tram_connection_scores = _pred.score_potential_connections(_stops_with_neighbours, connection_types=["TRAM_CONNECTS_TO"])
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(_tram_connection_scores, n=80)
+            _top_connections, _connected_stop_ids = extract_top_triples(_tram_connection_scores, n=tram_connections_slider.value)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
     return
@@ -2060,8 +2066,10 @@ def _(mo):
 @app.cell
 def _(mo, ready_to_predict: bool):
     button_predict_subway = mo.ui.run_button(label="Predict Subway Connections", disabled=(not ready_to_predict))
-    button_predict_subway
-    return (button_predict_subway,)
+    subway_connections_slider = mo.ui.slider(start=1, stop=100, step=1, value=20, show_value=True, debounce=True, label="Predictions:")
+
+    mo.hstack([button_predict_subway, subway_connections_slider])
+    return button_predict_subway, subway_connections_slider
 
 
 @app.cell
@@ -2077,6 +2085,7 @@ def _(
     predictor,
     predictor_testing_triples,
     predictor_triples,
+    subway_connections_slider,
 ):
     if button_predict_subway.value:
         with mo.status.spinner("Loading model...") as _spinner:       
@@ -2110,7 +2119,9 @@ def _(
                 _connection_predictions.append(_single_prediction)
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(pd.concat(_connection_predictions, ignore_index=True), n=30)
+            _top_connections, _connected_stop_ids = extract_top_triples(
+                pd.concat(_connection_predictions, ignore_index=True),
+                n=subway_connections_slider.value)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
     return
@@ -2133,8 +2144,10 @@ def _(mo):
 @app.cell
 def _(mo, ready_to_predict: bool):
     button_predict_frequency = mo.ui.run_button(label="Predict Connection Frequencies", disabled=(not ready_to_predict))
-    button_predict_frequency
-    return (button_predict_frequency,)
+    frequency_connections_slider = mo.ui.slider(start=1, stop=600, step=1, value=100, show_value=True, debounce=True, label="Predictions:")
+
+    mo.hstack([button_predict_frequency, frequency_connections_slider])
+    return button_predict_frequency, frequency_connections_slider
 
 
 @app.cell
@@ -2142,6 +2155,7 @@ def _(
     button_predict_frequency,
     display_connection_predictions,
     extract_top_triples,
+    frequency_connections_slider,
     graph,
     map_legend_frequency,
     mo,
@@ -2160,13 +2174,13 @@ def _(
             _bus_connection_scores = _pred.predict_connection_frequency(_stops_with_neighbours, apply_filter=False)
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=200)
+            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=frequency_connections_slider.value)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_frequency, _spinner)
     return
 
 
-@app.cell
+@app.cell(hide_code=True)
 def _(mo):
     mo.md(
         r"""

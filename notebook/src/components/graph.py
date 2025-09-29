@@ -114,7 +114,7 @@ def get_nearby_stops(*, id_list: list[str] = None, one_directional = True, only_
 
     id_filter_clause = f"s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else "True"
     direction_filter_clause = "s.id < t.id" if one_directional else "True"
-    targets_filter_clause = f"NOT (s)-[:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]->(t)" if only_disconnected else "True"
+    targets_filter_clause = f"NOT (s)-[:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]-(t)" if only_disconnected else "True"
 
     query = f"""
     MATCH (s:Stop:InUse)-[:IS_CLOSE_TO]->(t:Stop:InUse)
