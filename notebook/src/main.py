@@ -1657,13 +1657,13 @@ def _():
     training_configs = {
         'RotatE': {
             'model': 'RotatE', 
-            'model_kwargs': {'embedding_dim': 256},
+            'model_kwargs': {'embedding_dim': 512},
             'optimizer_kwargs': {'lr': 0.0004},
-            'training_kwargs': {'num_epochs': 450, 'batch_size': 512},
+            'training_kwargs': {'num_epochs': 600, 'batch_size': 1024},
             'loss': 'MarginRankingLoss',
             'loss_kwargs': {'margin': 6.0},
             'negative_sampler': 'bernoulli',
-            'negative_sampler_kwargs': {'num_negs_per_pos': 3},
+            'negative_sampler_kwargs': {'num_negs_per_pos': 15},
             'stopper': 'early',
             'stopper_kwargs':dict(
                 patience=30,  # Stop if loss value doesn't improve for 30 iterations
@@ -1673,20 +1673,23 @@ def _():
 
         'ComplEx': {
             'model': 'ComplEx',
-            'model_kwargs': {'embedding_dim': 200},
-            'optimizer': 'Adagrad', # said to work better with ComplEx
-            'optimizer_kwargs': {'lr': 0.015},
-            'training_kwargs': {'num_epochs': 600, 'batch_size': 512},
+            'model_kwargs': {'embedding_dim': 600},
+            'optimizer': 'Adam',
+            'optimizer_kwargs': {'lr': 0.001},
+            'training_kwargs': {'num_epochs': 600, 'batch_size': 1024},
             'regularizer': 'LpRegularizer',
-            'regularizer_kwargs': {'weight': 1e-6},
+            'regularizer_kwargs': {'p': 2, 'weight': 1e-5},
             'negative_sampler': 'bernoulli',
-            'negative_sampler_kwargs': {'num_negs_per_pos': 3},
-            'loss': 'SoftplusLoss',
-            'loss_kwargs': {'reduction': 'mean'},  # Ensure proper reduction
+            'negative_sampler_kwargs': {'num_negs_per_pos': 15},
+            'loss': 'MarginRankingLoss',
+            'loss_kwargs': dict(
+                margin=2.0,
+                reduction="mean"
+            ),
             'stopper': 'early',
             'stopper_kwargs':dict(
-                patience=30,  # Stop if loss value doesn't improve for 30 iterations
-                frequency=15 # Check every 10 epochs
+                patience=50,  # Stop if loss value doesn't improve for 50 iterations
+                frequency=25  # Check every 10 epochs
             )
         }
     }
