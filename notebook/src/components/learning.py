@@ -138,17 +138,18 @@ def get_models_summary() -> pd.DataFrame:
             config = load_training_config(model_name)
             training_triples = load_triples(model_name)[0]
 
-            # Get basic model info
             summary = {
-                'name': model_name,
-                'model_type': config["model"],
-                'dimensions': int(config["model_kwargs"]["embedding_dim"]),
-                'epochs': config["training_kwargs"]["num_epochs"],
-                'batch_size': config["training_kwargs"]["batch_size"],
-                'num_negs_per_pos': config["negative_sampler_kwargs"]["num_negs_per_pos"],
-                'num_triples': training_triples.num_triples,
-                'num_entities': training_triples.num_entities,
-                'num_relations': training_triples.num_relations,
+                'Name': model_name,
+                'Model Type': _get_path_if_exists(config, "model", default="default"),
+                'Dimensions': _get_path_if_exists(config, "model_kwargs", "embedding_dim", default="default"),
+                'Epochs': _get_path_if_exists(config, "training_kwargs", "num_epochs", default="default"),
+                'Batch size': _get_path_if_exists(config, "training_kwargs", "batch_size", default="default"),
+                'Optimizer': _get_path_if_exists(config, "optimizer", default="default"),
+                'Learning Rate': _get_path_if_exists(config, "optimizer_kwargs", "lr", default="default"),
+                'Negatives per Positive': _get_path_if_exists(config, "negative_sampler_kwargs", "num_negs_per_pos", default="default"),
+                'Triples': training_triples.num_triples,
+                'Entities': training_triples.num_entities,
+                'Relations': training_triples.num_relations,
             }
             model_summaries.append(summary)
         except Exception as e:
@@ -162,14 +163,22 @@ def get_models_summary() -> pd.DataFrame:
 
     # Convert to DataFrame
     if model_summaries:
-        df = pd.DataFrame(model_summaries)
-        column_order = ['name', 'model_type', 'dimensions', 'epochs', 'batch_size',
-                        'num_negs_per_pos', 'num_triples', 'num_entities', 'num_relations']
-        # Keep only columns that exist
-        existing_important_cols = [col for col in column_order if col in df.columns]
-        return df[existing_important_cols]
+        return pd.DataFrame(model_summaries)
     else:
         return pd.DataFrame()
+
+def _get_path_if_exists(config: dict, *path, default=None):
+    """
+    Gets the values at the given path in a nested dictionary or returns the default
+    value if the path does not exist.
+    """
+    current = config
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current
+
 
 def load_model(model_name: str) -> tuple[Model, TriplesFactory]:
     model_dir = _get_model_path(model_name)

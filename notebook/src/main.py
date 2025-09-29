@@ -1866,7 +1866,7 @@ def _(get_trained_models, learning, mo, pd):
     }
 
     rows = []
-    for _model in get_trained_models()["name"]:
+    for _model in get_trained_models()["Name"]:
         _results_df = learning.load_training_results(_model)
         row = {"Model": _model}
         for col_name, (side, rank, metric) in metrics_of_interest.items():
