@@ -2,6 +2,8 @@
 
 _A machine learning project to uncover missing transit connections in Vienna’s public transport network._
 
+![Connection Frequency Map](assets/connection_frequency_map.png)
+
 This project builds a [knowledge graph (KG)](https://en.wikipedia.org/wiki/Knowledge_graph) of the Dec 2024 - Dec 2025 public
 transport schedule of Wiener Linien GmbH & Co KG. It combines an open [GTFS schedule dataset](https://www.data.gv.at/katalog/datasets/ab4a73b6-1c2d-42e1-b4d9-049e04889cf0)
 with [fine-grained population data](https://www.data.gv.at/katalog/datasets/09e70f89-cadf-4a3b-a29a-2b3f3c6cbd71) (2021) and [geographic shapes of registration districts](https://www.data.gv.at/katalog/datasets/e4079286-310c-435a-af2d-64604ba9ade5) (_“Zählbezirke”_)

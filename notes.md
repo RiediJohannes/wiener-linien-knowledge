@@ -1,30 +1,3 @@
-## General Plan
-
-- Create KG
-  - Load GTFS data into Neo4j
-  - Load population data into Neo4J
-  - Load district data into Neo4J
-- Use cypher to derive logical connections between data points
-- Feed everything into a KG embedding
-- Find missing links
-
-## Experiences
-
-### GTFS Import
-
-Reading the database using rust took roughly 3 minutes before optimisation.
-- After deactivating shape files → roughly 2 minutes
-- After deactivating trimming → 1 minute
-- Additional problem with times that extend beyond 23:59:59
-
-## Embeddings
-
-Look at comparative analysis paper:
-https://dl.acm.org/doi/pdf/10.1145/3424672  
-They were particularly fond of:
-- HAKE and its predecessor RotatE
-- ComplEx
-
 ## Time
 - 30.8.
   + 11:00-12:00
@@ -89,11 +62,10 @@ They were particularly fond of:
   - 1:30-5:30
 - 28.9.
   - 17:30-19:30
-  - 21:30-
+  - 21:30-4:30
 
 ### Zu tun:
 - Cover Pages ausfüllen
-- Ergebnisvisualisierungen zeigen
 - Know-how für KGEs zeigen
 - (Bestehende connections einzeichnen in Karte)
 
