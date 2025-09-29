@@ -102,12 +102,25 @@ def get_stops_for_subdistrict(district_code: int, subdistrict_code: int, only_st
     return _parse_stops_from_response(response)
 
 
-def get_nearby_stops(*, id_list: list[str] = None) -> list[tuple[str, list[str]]]:
-    where_clause = f"WHERE s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else ""
+def get_nearby_stops(*, id_list: list[str] = None, one_directional = True, only_disconnected = True) -> list[tuple[str, list[str]]]:
+    """
+    Collects the neighbourhood (all stops reachable by an IS_CLOSE_TO relationship from a given stop) for all stops
+    with the InUse label.
+    :param id_list: A list of stop IDs for which the neighbourhood should be retrieved. If set to None, all stops are retrieved.
+    :param one_directional: If set to True, only one direction for each pair of nearby stops is retrieved.
+    :param only_disconnected: If set to True, only stops that are not connected by any public transit service are retrieved.
+    :return:
+    """
+
+    id_filter_clause = f"s.id IN [\"{'", "'.join(id_list)}\"]" if id_list else "True"
+    direction_filter_clause = "s.id < t.id" if one_directional else "True"
+    targets_filter_clause = f"NOT (s)-[:BUS_CONNECTS_TO|TRAM_CONNECTS_TO|SUBWAY_CONNECTS_TO]->(t)" if only_disconnected else "True"
 
     query = f"""
     MATCH (s:Stop:InUse)-[:IS_CLOSE_TO]->(t:Stop:InUse)
-    {where_clause}
+    WHERE {direction_filter_clause}
+      AND {id_filter_clause}
+      AND {targets_filter_clause}
     WITH s, collect(t.id) as potential_targets
     RETURN s.id as start, potential_targets
     """

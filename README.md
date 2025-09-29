@@ -8,8 +8,8 @@ with [fine-grained population data](https://www.data.gv.at/katalog/datasets/09e7
 to **reason about transport availability in relation to population density**.
 
 Applying the machine learning technique of [**knowledge graph embeddings**](https://en.wikipedia.org/wiki/Knowledge_graph_embedding),
-this KG is then used to predict **where new or improved connections could strengthen the network** by suggesting either entirely new connections
-or a higher frequency service between existing stops (see [link prediction](https://en.wikipedia.org/wiki/Link_prediction)).
+this KG is then used to predict **where new connections could strengthen the network** by suggesting an adequate mode of
+transport (bus/tram/subway) and operation frequency between previously disconnected stops (see [link prediction](https://en.wikipedia.org/wiki/Link_prediction)).
 
 ## Technologies
 
@@ -20,7 +20,7 @@ data sources and derived knowledge. For exploration and experimentation, the pro
 For the knowledge graph embeddings, two different embedding models were compared, namely **RotatE** and **ComplEx**.
 
 The project deployment is orchestrated through [docker](https://www.docker.com). All components of the project provide a Dockerfile
-to create a docker image of the respective component and the whole system is reliably deployed via the given
+to create a docker image of the respective component, and the whole system is reliably deployed via the given
 **docker compose** file.
 
 ## Project Structure

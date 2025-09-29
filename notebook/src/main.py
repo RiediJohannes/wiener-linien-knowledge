@@ -1896,14 +1896,14 @@ def _(kge_model_selection, learning, mo):
                 To generate predictions, please **select** one of the trained **KGE models**.\n
                 {kge_model_selection}
                 """), kind=kind)
-    
+
         mo.output.replace(_callout)
 
 
     if kge_model_selection.value:
         predictor, predictor_triples = learning.load_model(kge_model_selection.value)
         predictor_testing_triples = learning.load_triples(kge_model_selection.value, False, True, True)
-    
+
         if predictor and predictor_triples and predictor_testing_triples:
             _model_status = mo.md(f"\n\n✅ Model `{kge_model_selection.value}` is ready to use!")
             _show_model_select_callout(_model_status, kind="success")
@@ -1921,8 +1921,8 @@ def _(mo):
         r"""
     ### Predicting Bus/Tram Connections
 
-    First, we would like the model to predict the most likely new bus and tram connections. We _could_ do this by feeding the model **incomplete triples** of the form `(source_stop, BUS_CONNECTS_TO, ??)` and let it come up with suitable predictions for the missing tail of the triple.  
-    However, since we are exclusively talking about _direct connections between existing stops_, it only makes sense to consider stops in the vicinity of each other. Therefore, we significantly improve performance by **selectively generating complete triples** and only let the model **score these suggested triples** in one pass.
+    First, we would like the model to predict the most likely new bus and tram connections. We _could_ do this by feeding the model **incomplete triples** of the form `(source_stop, BUS_CONNECTS_TO, ??)` and let it come up with suitable predictions for the missing tail of the triple. However, since we are exclusively talking about _direct connections between existing stops_, it only makes sense to consider stops in the vicinity of each other.  
+    Therefore, we significantly improve performance by **selectively generating complete triples** like `(stopA, BUS_CONNECTS_TO, nearbyStop)` and only let the model **score these suggested triples** in one pass. Additionally, we can further reduce the number of triples to score by only asking the model about connections between stops that aren't already connected.
     """
     )
     return
@@ -2003,7 +2003,7 @@ def _(
             _bus_connection_scores = _pred.score_potential_connections(_stops_with_neighbours, connection_types=["BUS_CONNECTS_TO"])
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=40)
+            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=8)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_mode_of_transport, _spinner)
     return
@@ -2117,6 +2117,20 @@ def _(
 
 
 @app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ### Predicting Connection Frequencies
+
+    The final prediction shall output adequate **operational frequencies of proposed connections**. Again, we only consider stops in the vicinity of each other, but this time we generate six triples per relevant stop pair, one for each level of frequency (see map legend). If multiple triples for the same connection pair score high, we only display the connection frequency with the highest score among them.
+
+    Note that we only check connections between _stops that are not directly connected_ yet. Initially, I intended to check all neighbouring stops. However, as to be expected, in this case the model almost always picks the frequency that is currently in place, since that's what the model was trained on.
+    """
+    )
+    return
+
+
+@app.cell
 def _(mo, ready_to_predict: bool):
     button_predict_frequency = mo.ui.run_button(label="Predict Connection Frequencies", disabled=(not ready_to_predict))
     button_predict_frequency
@@ -2146,9 +2160,22 @@ def _(
             _bus_connection_scores = _pred.predict_connection_frequency(_stops_with_neighbours, apply_filter=False)
 
             _spinner.update("Extracting top connections...")
-            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=400)
+            _top_connections, _connected_stop_ids = extract_top_triples(_bus_connection_scores, n=200)
 
             display_connection_predictions(_top_connections, _connected_stop_ids, map_legend_frequency, _spinner)
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(
+        r"""
+    ## Closing Remarks
+
+    This concludes our journey of building and evolving a knowledge graph (KG) from public transit data and geographic/demographic statistics for the city of Vienna. Based on this KG, we trained multiple knowledge graph embedding (KGE) models and used them for simple predictions about reasonable extensions to the public transit network.  
+    Naturally, there is still a plethora of ways to expand or improve the KG and its reasoning capabilities. Nevertheless, we will draw the line here for this mini project.
+    """
+    )
     return
 
 
