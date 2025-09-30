@@ -1868,28 +1868,33 @@ def _(get_trained_models, learning, mo, pd):
         "MRR":       ("both", "realistic", "inverse_harmonic_mean_rank"),
     }
 
-    rows = []
-    for _model in get_trained_models()["Name"]:
-        _results_df = learning.load_training_results(_model)
-        row = {"Model": _model}
-        for col_name, (side, rank, metric) in metrics_of_interest.items():
-            value = (
-                _results_df.loc[
-                    (_results_df["Side"] == side)
-                    & (_results_df["Rank_type"] == rank)
-                    & (_results_df["Metric"] == metric),
-                    "Value"
-                ]
-                .squeeze()   # get scalar if exactly one match
-            )
-            row[col_name] = value
-        rows.append(row)
+    _trained_models = get_trained_models()
 
-    final_df = (pd.DataFrame(rows)
-        .sort_values(by="Hits@10", ascending=False)
-        .reset_index(drop=True))
-
-    mo.output.append(mo.ui.table(final_df, selection=None, pagination=False))
+    if _trained_models.empty:
+        mo.output.append(mo.md("_There are currently no pretrained models available._"))
+    else:
+        rows = []
+        for _model in _trained_models["Name"]:
+            _results_df = learning.load_training_results(_model)
+            row = {"Model": _model}
+            for col_name, (side, rank, metric) in metrics_of_interest.items():
+                value = (
+                    _results_df.loc[
+                        (_results_df["Side"] == side)
+                        & (_results_df["Rank_type"] == rank)
+                        & (_results_df["Metric"] == metric),
+                        "Value"
+                    ]
+                    .squeeze()   # get scalar if exactly one match
+                )
+                row[col_name] = value
+            rows.append(row)
+    
+        final_df = (pd.DataFrame(rows)
+            .sort_values(by="Hits@10", ascending=False)
+            .reset_index(drop=True))
+    
+        mo.output.append(mo.ui.table(final_df, selection=None, pagination=False))
     return
 
 
@@ -1908,7 +1913,7 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(get_trained_models, mo):
     _trained_models = get_trained_models()
-    model_names = _trained_models['Name'].tolist()
+    model_names = [] if _trained_models.empty else _trained_models['Name'].tolist()
 
     kge_model_selection = mo.ui.dropdown(
         label="Select model: ",
