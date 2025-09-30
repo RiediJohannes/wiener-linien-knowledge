@@ -397,7 +397,7 @@ def reassign_cluster_stops(
         print("Re-assigning cluster stops...")
         _affected_rows = graph.execute_operation_returning_count(operation_assign_cluster_root)
         print(f"Affected {_affected_rows} nodes")
-        check_status_clusters_created(True)
+        check_status_clusters_created()
 
     present.run_code(button_reassign_cluster_stops.value, _reassign_cluster_stops)
     return
