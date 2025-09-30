@@ -10,6 +10,7 @@ services:
       - NEO4J_initial_dbms_default__database=gtfs
       - NEO4J_server_directories_import=/import
       - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_logs_debug_level=ERROR
     ports:
       - "7474:7474"   # HTTP (Browser UI)
       - "7687:7687"   # Bolt (Driver connections)
