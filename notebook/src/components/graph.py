@@ -1,3 +1,4 @@
+import logging
 import os
 
 import neo4j.graph
@@ -7,6 +8,7 @@ from src.components.types import SubDistrict, Stop, Connection, ClusterStop, par
 
 URI = "bolt://" + os.getenv('NEO4J_URI', "localhost:7687")
 AUTH = ("neo4j", "")
+logging.getLogger("neo4j").setLevel(logging.ERROR)
 
 # Create a driver instance
 driver = GraphDatabase.driver(URI, auth=AUTH)
